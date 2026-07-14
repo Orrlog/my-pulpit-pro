@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import {
@@ -11,6 +12,14 @@ import {
   translations,
   type StartPathId,
 } from "./data";
+import {
+  MESSAGE_DRAFT_STORAGE_KEY,
+  buildClosing,
+  buildInitialPoints,
+  buildIntroduction,
+  buildScriptureBank,
+  type MessageDraft,
+} from "./message-draft-storage";
 import {
   getDevelopDirections,
   getExploreDirections,
@@ -32,8 +41,14 @@ function FieldLabel({ htmlFor, children }: { htmlFor: string; children: ReactNod
   );
 }
 
-export function NewMessageWizard({ initialPath }: { initialPath?: string }) {
-  const [stage, setStage] = useState(0);
+export function NewMessageWizard({
+  initialPath,
+  initialStage = 0,
+}: {
+  initialPath?: string;
+  initialStage?: number;
+}) {
+  const [stage, setStage] = useState(initialStage);
   const [selectedPath, setSelectedPath] = useState<StartPathId>(
     isStartPathId(initialPath) ? initialPath : "explore",
   );
@@ -51,7 +66,7 @@ export function NewMessageWizard({ initialPath }: { initialPath?: string }) {
   const [showOwnConcern, setShowOwnConcern] = useState(false);
   const [ownConcern, setOwnConcern] = useState("");
   const [selectedDirection, setSelectedDirection] = useState<number | null>(null);
-  const [modalOpen, setModalOpen] = useState(false);
+  const router = useRouter();
 
   const path = useMemo(
     () => startPaths.find((item) => item.id === selectedPath) ?? startPaths[0],
@@ -71,7 +86,8 @@ export function NewMessageWizard({ initialPath }: { initialPath?: string }) {
 
     return getExploreDirections(theme, tone, ideaOffset);
   }, [idea, ideaOffset, passage, response, selectedConcern, selectedPath, theme, tone]);
-  const nextDisabled = stage === 3 && selectedDirection === null;
+  const isFinalStage = stage === stages.length - 1;
+  const nextDisabled = isFinalStage && selectedDirection === null;
 
   function choosePath(nextPath: StartPathId) {
     setSelectedPath(nextPath);
@@ -99,6 +115,72 @@ export function NewMessageWizard({ initialPath }: { initialPath?: string }) {
     setConcernOffset((current) => current + 5);
     setSelectedConcernIndex(null);
     setSelectedDirection(null);
+  }
+
+  function createMessageDraft() {
+    if (selectedDirection === null) return;
+
+    const direction = directionCards[selectedDirection];
+    const pastoralFocus = direction.focus.replace(/^Preview sample:\s*/i, "");
+    const mode = messageModes.find((item) => item.id === selectedMode) ?? messageModes[0];
+    const selectedLength = messageLengths.find((item) => item.value === length) ?? messageLengths[1];
+    const now = new Date().toISOString();
+    const scriptureBank = buildScriptureBank({
+      length,
+      mainScripture: direction.scripture,
+      directionTitle: direction.title,
+      bigIdea: direction.bigIdea,
+      angle: direction.angle,
+      pastoralFocus,
+    });
+    const draft: MessageDraft = {
+      id: `local-${Date.now()}`,
+      createdAt: now,
+      updatedAt: now,
+      startingPath: selectedPath,
+      startingPathLabel: path.label,
+      messageMode: selectedMode,
+      messageModeLabel: mode.label,
+      directionTitle: direction.title,
+      mainScripture: direction.scripture,
+      bigIdea: direction.bigIdea,
+      angle: direction.angle,
+      pastoralFocus,
+      length,
+      lengthLabel: selectedLength.label,
+      translation,
+      developIdea: selectedPath === "develop" ? idea.trim() : undefined,
+      developPassage: selectedPath === "develop" ? passage.trim() : undefined,
+      desiredResponse: selectedPath === "develop" ? response.trim() : undefined,
+      weeklyConcern: selectedPath === "week" ? selectedConcern?.category ?? ownConcern.trim() : undefined,
+      title: direction.title,
+      scriptureBank,
+      introduction: buildIntroduction({
+        directionTitle: direction.title,
+        mainScripture: direction.scripture,
+        bigIdea: direction.bigIdea,
+        angle: direction.angle,
+        pastoralFocus,
+      }),
+      points: buildInitialPoints({
+        length,
+        directionTitle: direction.title,
+        mainScripture: direction.scripture,
+        bigIdea: direction.bigIdea,
+        angle: direction.angle,
+        pastoralFocus,
+        scriptureBank,
+      }),
+      closing: buildClosing({
+        directionTitle: direction.title,
+        mainScripture: direction.scripture,
+        bigIdea: direction.bigIdea,
+        pastoralFocus,
+      }),
+    };
+
+    window.localStorage.setItem(MESSAGE_DRAFT_STORAGE_KEY, JSON.stringify(draft));
+    router.push("/message-workspace");
   }
 
   return (
@@ -298,13 +380,6 @@ export function NewMessageWizard({ initialPath }: { initialPath?: string }) {
                     </select>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={refreshIdeas}
-                  className="min-h-12 w-fit rounded-full bg-gold px-6 py-3 text-sm font-bold text-teal-dark"
-                >
-                  Surprise Me.
-                </button>
               </div>
             ) : null}
 
@@ -604,16 +679,10 @@ export function NewMessageWizard({ initialPath }: { initialPath?: string }) {
                 <h3 className="text-xl font-bold text-teal">Review selected direction</h3>
                 <p className="mt-2 text-sm leading-6 text-muted">
                   {directionCards[selectedDirection].title} is selected. Creating the full outline
-                  will use 1 of your 8 monthly message projects. You may edit, rewrite, rearrange,
-                  and rebuild content inside that project without using another project.
+                  will count as 1 of your 8 monthly message projects once backend tracking is
+                  connected. You may edit, rewrite, rearrange, and rebuild content in this local
+                  preview without using another project.
                 </p>
-                <button
-                  type="button"
-                  onClick={() => setModalOpen(true)}
-                  className="mt-5 min-h-12 rounded-full bg-teal px-6 py-3 text-sm font-bold text-cream-strong"
-                >
-                  Create This Message
-                </button>
               </div>
             ) : null}
           </div>
@@ -630,41 +699,20 @@ export function NewMessageWizard({ initialPath }: { initialPath?: string }) {
           </button>
           <button
             type="button"
-            onClick={() => setStage((current) => Math.min(stages.length - 1, current + 1))}
-            disabled={stage === stages.length - 1 || nextDisabled}
+            onClick={() => {
+              if (isFinalStage) {
+                createMessageDraft();
+                return;
+              }
+              setStage((current) => Math.min(stages.length - 1, current + 1));
+            }}
+            disabled={nextDisabled}
             className="min-h-11 rounded-full bg-teal px-5 py-2 text-sm font-bold text-cream-strong disabled:cursor-not-allowed disabled:opacity-45"
           >
-            Continue
+            {isFinalStage ? "Create Message" : "Continue"}
           </button>
         </div>
       </section>
-
-      {modalOpen ? (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-teal-dark/70 px-5">
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="message-modal-title"
-            className="max-w-lg rounded-3xl border border-line bg-cream-strong p-6 shadow-2xl"
-          >
-            <p className="text-sm font-bold uppercase tracking-[0.18em] text-gold">Next phase</p>
-            <h2 id="message-modal-title" className="mt-3 font-serif text-3xl font-semibold text-teal">
-              Message generation will be connected in the next build phase.
-            </h2>
-            <p className="mt-4 text-sm leading-7 text-muted">
-              This preview does not increment a counter, save a project, or generate sermon
-              content.
-            </p>
-            <button
-              type="button"
-              onClick={() => setModalOpen(false)}
-              className="mt-6 min-h-11 rounded-full bg-teal px-5 py-2 text-sm font-bold text-cream-strong"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }

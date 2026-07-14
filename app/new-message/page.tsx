@@ -8,6 +8,7 @@ export const metadata = {
 type NewMessagePageProps = {
   searchParams: Promise<{
     path?: string;
+    stage?: string;
   }>;
 };
 
@@ -16,7 +17,7 @@ export default async function NewMessagePage({ searchParams }: NewMessagePagePro
 
   return (
     <AppShell title="Start a New Message">
-      <NewMessageWizard initialPath={params.path} />
+      <NewMessageWizard initialPath={params.path} initialStage={params.stage === "details" ? 1 : 0} />
     </AppShell>
   );
 }
