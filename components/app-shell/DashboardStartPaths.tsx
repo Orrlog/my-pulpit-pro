@@ -17,7 +17,7 @@ export function DashboardStartPaths() {
             key={path.id}
             className={`premium-card rounded-3xl border p-6 ${
               selected
-                ? "premium-card-dark border-2 border-gold bg-teal text-cream-strong shadow-[0_22px_52px_rgba(0,47,49,0.24)]"
+                ? "selected-card premium-card-dark border-2 border-gold bg-teal text-cream-strong shadow-[0_22px_52px_rgba(0,47,49,0.24)]"
                 : "border-line bg-cream-strong text-ink"
             }`}
           >

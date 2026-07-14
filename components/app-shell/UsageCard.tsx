@@ -5,7 +5,7 @@ export function UsageCard() {
   const percent = Math.round((used / total) * 100);
 
   return (
-    <section className="premium-card premium-card-dark rounded-3xl border border-teal-dark bg-teal p-6 text-cream-strong shadow-[0_22px_52px_rgba(0,47,49,0.24)]">
+    <section className="rounded-3xl border border-teal-dark bg-teal p-6 text-cream-strong shadow-[0_22px_52px_rgba(0,47,49,0.24)]">
       <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-sm font-bold uppercase tracking-[0.18em] text-gold">Plan preview</p>
