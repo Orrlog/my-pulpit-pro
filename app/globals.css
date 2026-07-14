@@ -1,0 +1,109 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f7f0e3;
+  --cream: #fff9ee;
+  --cream-strong: #fffdf8;
+  --teal: #003d3f;
+  --teal-dark: #002f31;
+  --gold: #c99532;
+  --text: #1e2926;
+  --muted: #66716d;
+  --border: #e4d8c4;
+  --shadow: 0 24px 60px rgba(30, 41, 38, 0.11);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-cream: var(--cream);
+  --color-cream-strong: var(--cream-strong);
+  --color-teal: var(--teal);
+  --color-teal-dark: var(--teal-dark);
+  --color-gold: var(--gold);
+  --color-ink: var(--text);
+  --color-muted: var(--muted);
+  --color-line: var(--border);
+  --font-sans: var(--font-body);
+  --font-serif: var(--font-heading);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  min-width: 320px;
+  overflow-x: hidden;
+  background:
+    radial-gradient(circle at top left, rgba(201, 149, 50, 0.14), transparent 32rem),
+    var(--background);
+  color: var(--text);
+}
+
+a,
+button {
+  outline-offset: 4px;
+}
+
+a:focus-visible,
+button:focus-visible,
+summary:focus-visible {
+  outline: 3px solid rgba(201, 149, 50, 0.75);
+  outline-offset: 4px;
+}
+
+::selection {
+  background: rgba(201, 149, 50, 0.32);
+}
+
+.premium-card {
+  box-shadow: 0 10px 26px rgba(30, 41, 38, 0.05);
+  transition:
+    transform 220ms ease,
+    box-shadow 220ms ease,
+    border-color 220ms ease,
+    background-color 220ms ease;
+  transition-timing-function: ease-out;
+}
+
+.premium-card:focus-visible,
+.premium-card:focus-within {
+  border-color: rgba(201, 149, 50, 0.7);
+  box-shadow: 0 18px 42px rgba(0, 61, 63, 0.16);
+  background-color: #fffdf8;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .premium-card:hover {
+    border-color: rgba(201, 149, 50, 0.6);
+    background-color: #fffdf8;
+    box-shadow: 0 18px 42px rgba(0, 61, 63, 0.16);
+    transform: translateY(-6px);
+  }
+
+  .premium-card.premium-card-dark:hover {
+    border-color: rgba(201, 149, 50, 0.68);
+    background-color: #064f50;
+    box-shadow: 0 20px 46px rgba(0, 31, 32, 0.3);
+    color: #fff9ee;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .premium-card:hover {
+    transform: none;
+  }
+}
