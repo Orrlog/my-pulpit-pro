@@ -5,16 +5,18 @@ import type { ReactNode } from "react";
 import {
   messageLengths,
   messageModes,
-  sampleDirections,
   startPaths,
   themes,
-  timelyConcernSamples,
   tones,
   translations,
-  type SampleDirection,
   type StartPathId,
-  type TimelyConcern,
 } from "./data";
+import {
+  getDevelopDirections,
+  getExploreDirections,
+  getVisibleConcerns,
+  getWeeklyConcernDirections,
+} from "./direction-previews";
 
 const stages = ["Starting Point", "Message Details", "Length and Translation", "Explore Directions"];
 
@@ -28,42 +30,6 @@ function FieldLabel({ htmlFor, children }: { htmlFor: string; children: ReactNod
       {children}
     </label>
   );
-}
-
-function rotateItems<T>(items: T[], offset: number, count: number) {
-  return [...items.slice(offset), ...items.slice(0, offset)].slice(0, count);
-}
-
-function formatDevelopedDirection(
-  direction: SampleDirection,
-  idea: string,
-  passage: string,
-): SampleDirection {
-  const cleanIdea = idea.trim();
-  const cleanPassage = passage.trim();
-
-  return {
-    ...direction,
-    scripture: cleanPassage || direction.scripture,
-    angle: cleanIdea
-      ? `A preview direction shaped around "${cleanIdea}" while preserving Scripture-centered development.`
-      : direction.angle,
-  };
-}
-
-function formatConcernDirection(
-  direction: SampleDirection,
-  concern: TimelyConcern | null,
-): SampleDirection {
-  if (!concern) {
-    return direction;
-  }
-
-  return {
-    ...direction,
-    angle: `${concern.category}: ${concern.possibleDirection}`,
-    focus: concern.pastoralTheme,
-  };
 }
 
 export function NewMessageWizard({ initialPath }: { initialPath?: string }) {
@@ -91,27 +57,20 @@ export function NewMessageWizard({ initialPath }: { initialPath?: string }) {
     () => startPaths.find((item) => item.id === selectedPath) ?? startPaths[0],
     [selectedPath],
   );
-  const visibleDirections = useMemo(
-    () => rotateItems(sampleDirections, ideaOffset, 5),
-    [ideaOffset],
-  );
-  const visibleConcerns = useMemo(
-    () => rotateItems(timelyConcernSamples, concernOffset, 5),
-    [concernOffset],
-  );
+  const visibleConcerns = useMemo(() => getVisibleConcerns(concernOffset), [concernOffset]);
   const selectedConcern =
     selectedConcernIndex === null ? null : visibleConcerns[selectedConcernIndex] ?? null;
-  const directionCards = visibleDirections.map((direction) => {
+  const directionCards = useMemo(() => {
     if (selectedPath === "develop") {
-      return formatDevelopedDirection(direction, idea, passage);
+      return getDevelopDirections(idea, passage, response);
     }
 
     if (selectedPath === "week") {
-      return formatConcernDirection(direction, selectedConcern);
+      return getWeeklyConcernDirections(selectedConcern);
     }
 
-    return direction;
-  });
+    return getExploreDirections(theme, tone, ideaOffset);
+  }, [idea, ideaOffset, passage, response, selectedConcern, selectedPath, theme, tone]);
   const nextDisabled = stage === 3 && selectedDirection === null;
 
   function choosePath(nextPath: StartPathId) {
@@ -132,12 +91,12 @@ export function NewMessageWizard({ initialPath }: { initialPath?: string }) {
   }
 
   function refreshIdeas() {
-    setIdeaOffset((current) => (current + 5) % sampleDirections.length);
+    setIdeaOffset((current) => current + 5);
     setSelectedDirection(null);
   }
 
   function refreshConcerns() {
-    setConcernOffset((current) => (current + 5) % timelyConcernSamples.length);
+    setConcernOffset((current) => current + 5);
     setSelectedConcernIndex(null);
     setSelectedDirection(null);
   }
@@ -181,7 +140,7 @@ export function NewMessageWizard({ initialPath }: { initialPath?: string }) {
                     onClick={() => choosePath(item.id)}
                     className={`premium-card rounded-3xl border p-5 text-left ${
                       selected
-                        ? "premium-card-dark border-2 border-gold bg-teal text-cream-strong shadow-[0_22px_52px_rgba(0,47,49,0.24)]"
+                        ? "selected-card premium-card-dark border-2 border-gold bg-teal text-cream-strong shadow-[0_22px_52px_rgba(0,47,49,0.24)]"
                         : "border-line bg-cream-strong text-ink"
                     }`}
                     aria-pressed={selected}
@@ -258,7 +217,7 @@ export function NewMessageWizard({ initialPath }: { initialPath?: string }) {
                       onClick={() => setSelectedMode(mode.id)}
                       className={`rounded-2xl border p-4 text-left ${
                         selected && selectable
-                          ? "border-2 border-gold bg-teal text-cream-strong shadow-[0_16px_32px_rgba(0,47,49,0.18)]"
+                          ? "selected-card border-2 border-gold bg-teal text-cream-strong shadow-[0_16px_32px_rgba(0,47,49,0.18)]"
                           : mode.locked
                             ? "cursor-not-allowed border-line bg-cream text-muted opacity-85"
                             : "border-line bg-cream-strong text-ink"
@@ -405,7 +364,7 @@ export function NewMessageWizard({ initialPath }: { initialPath?: string }) {
                         key={`${concern.category}-${concern.suggestedRefs}`}
                         className={`rounded-3xl border p-4 ${
                           selected
-                            ? "border-2 border-gold bg-teal text-cream-strong shadow-[0_18px_38px_rgba(0,47,49,0.2)]"
+                            ? "selected-card border-2 border-gold bg-teal text-cream-strong shadow-[0_18px_38px_rgba(0,47,49,0.2)]"
                             : "border-line bg-background"
                         }`}
                       >
@@ -519,7 +478,7 @@ export function NewMessageWizard({ initialPath }: { initialPath?: string }) {
                   onClick={() => setLength(item.value)}
                   className={`premium-card rounded-3xl border p-5 text-left ${
                     length === item.value
-                      ? "border-2 border-gold bg-teal text-cream-strong"
+                      ? "selected-card border-2 border-gold bg-teal text-cream-strong shadow-[0_18px_38px_rgba(0,47,49,0.2)]"
                       : "border-line bg-cream-strong text-ink"
                   }`}
                 >

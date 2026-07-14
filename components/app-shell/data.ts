@@ -269,6 +269,27 @@ export const sampleDirections: SampleDirection[] = [
 
 export const timelyConcernSamples: TimelyConcern[] = [
   {
+    category: "Community Tragedy",
+    context: "A community is carrying shock, grief, and questions after painful loss.",
+    pastoralTheme: "God meets His people in grief and calls the church to tender care.",
+    possibleDirection: "Give language for lament, comfort, community care, and hope during loss.",
+    suggestedRefs: "Psalm 34:18; John 11:33-36; Romans 12:15",
+  },
+  {
+    category: "War and International Instability",
+    context: "Global conflict and uncertainty are stirring fear, anger, and helplessness.",
+    pastoralTheme: "The Lord forms His people in peace, prayer, courage, and faithful witness.",
+    possibleDirection: "Lead the church toward prayerful trust and courage during uncertainty.",
+    suggestedRefs: "Psalm 46; Matthew 5:9; Philippians 4:4-9",
+  },
+  {
+    category: "Economic Pressure",
+    context: "Families are feeling strain from bills, work pressure, and uncertain provision.",
+    pastoralTheme: "God teaches trust, contentment, generosity, and family care during hardship.",
+    possibleDirection: "Speak to provision, contentment, generosity, family strain, and trust during hardship.",
+    suggestedRefs: "Matthew 6:25-34; Philippians 4:10-13; 2 Corinthians 9:6-8",
+  },
+  {
     category: "Fear",
     context: "People feel unsettled by what they cannot control.",
     pastoralTheme: "God's presence steadies His people.",
