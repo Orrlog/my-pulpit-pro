@@ -51,7 +51,7 @@ export function AppShell({
   return (
     <div className="min-h-screen bg-background text-ink">
       <div className="lg:grid lg:grid-cols-[18rem_1fr]">
-        <aside className="hidden min-h-screen border-r border-line bg-cream-strong px-5 py-6 lg:block">
+        <aside className="hidden min-h-screen border-r border-line bg-cream-strong px-5 py-6 print:hidden lg:block">
           <AppWordmark />
           <div className="mt-6 rounded-2xl border border-line bg-background/70 p-3">
             <p className="text-xs font-bold uppercase tracking-[0.16em] text-gold">Preview mode</p>
@@ -66,7 +66,7 @@ export function AppShell({
         </aside>
 
         <div className="min-w-0">
-          <header className="sticky top-0 z-30 border-b border-line bg-background/95 px-5 py-4 backdrop-blur sm:px-6 lg:px-8">
+          <header className="sticky top-0 z-30 border-b border-line bg-background/95 px-5 py-4 backdrop-blur print:hidden sm:px-6 lg:px-8">
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">
@@ -90,7 +90,7 @@ export function AppShell({
             </div>
           </header>
 
-          <main className="mx-auto max-w-7xl px-5 py-8 sm:px-6 lg:px-8">{children}</main>
+          <main className="mx-auto max-w-7xl px-5 py-8 print:max-w-none print:p-0 sm:px-6 lg:px-8">{children}</main>
         </div>
       </div>
     </div>
