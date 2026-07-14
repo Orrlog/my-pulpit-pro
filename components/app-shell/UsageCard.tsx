@@ -1,5 +1,5 @@
 export function UsageCard() {
-  const used = 3;
+  const used = 0;
   const total = 8;
   const remaining = total - used;
   const percent = Math.round((used / total) * 100);
@@ -11,7 +11,7 @@ export function UsageCard() {
           <p className="text-sm font-bold uppercase tracking-[0.18em] text-gold">Plan preview</p>
           <h2 className="mt-2 text-2xl font-bold text-cream-strong">Solo Plan</h2>
           <p className="mt-2 text-sm leading-6 text-cream-strong/75">
-            Preview data until backend tracking is connected.
+            Preview data until backend tracking is connected. Exploring ideas is free.
           </p>
         </div>
         <div className="min-w-56">
@@ -23,7 +23,7 @@ export function UsageCard() {
             <div className="h-full rounded-full bg-gold" style={{ width: `${percent}%` }} />
           </div>
           <p className="mt-3 text-sm font-semibold text-cream-strong/75">
-            Message projects used this month
+            Message projects used this month. Only creating the full message workspace counts as a project once backend tracking is connected.
           </p>
         </div>
       </div>
