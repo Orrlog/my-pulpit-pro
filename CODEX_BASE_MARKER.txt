@@ -1,0 +1,1 @@
+Issue 2 current base commit marker. This file confirms the task is running from the updated repository state that includes CODEX_TASK_ISSUE_2.md and the merged preview-direction fixes.
