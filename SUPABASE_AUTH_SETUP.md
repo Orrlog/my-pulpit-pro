@@ -73,9 +73,9 @@ Do not manually redeploy through Vercel for this setup. GitHub branch deployment
 
 ## Profile table and owner role setup
 
-After applying the profile migration, Supabase will automatically create a `public.profiles` row for each new Auth user. Existing Auth users may need a profile row inserted manually if they were created before this migration.
+After applying the profile migration, Supabase will automatically create a `public.profiles` row for each new Auth user and backfill profile rows for Auth users who already existed before the migration.
 
-To promote the existing founder account to owner, use the Supabase SQL Editor after signing up and confirming the founder account. Replace the placeholder email below with the founder account email before running it:
+To promote the existing founder account to owner, use the Supabase SQL Editor after applying the migration. Replace the placeholder email below with the founder account email before running it:
 
 ```sql
 update public.profiles
