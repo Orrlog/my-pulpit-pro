@@ -98,26 +98,51 @@ export default function MessageWorkspacePage() {
   }, [projectId]);
 
   useEffect(() => {
-    function finalSave() {
+    async function finalSave() {
       const activeProjectId = projectIdRef.current;
       const pending = pendingDraftRef.current;
-      if (!activeProjectId || !pending || inFlightRef.current) return;
+      const requestVersion = pendingVersionRef.current;
+      if (!activeProjectId || !pending || !requestVersion || inFlightRef.current) return;
+
+      if (saveTimerRef.current) {
+        window.clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+
+      inFlightRef.current = true;
+      let requestSucceeded = false;
+
       try {
-        void fetch(`/api/message-projects/${activeProjectId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ draft: pending }),
-          keepalive: true,
-        });
-      } catch {}
+        const project = await sendDraft(pending, undefined, true);
+        requestSucceeded = true;
+        if (project && requestVersion === pendingVersionRef.current) {
+          pendingDraftRef.current = null;
+          pendingVersionRef.current = 0;
+        }
+        if (project && requestVersion === editVersionRef.current) {
+          savedVersionRef.current = requestVersion;
+          setProjectStatus(project.status);
+          setAutosaveStatus("saved");
+        }
+      } catch {
+        if (document.visibilityState === "visible") setAutosaveStatus("failed");
+      } finally {
+        inFlightRef.current = false;
+        if (requestSucceeded && pendingDraftRef.current && pendingVersionRef.current > requestVersion) {
+          void flushAutosave();
+        }
+      }
     }
-    function handleVisibilityChange() { if (document.visibilityState === "hidden") finalSave(); }
+    function handleVisibilityChange() { if (document.visibilityState === "hidden") void finalSave(); }
+    function handlePageHide() { void finalSave(); }
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    window.addEventListener("pagehide", finalSave);
+    window.addEventListener("pagehide", handlePageHide);
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("pagehide", finalSave);
+      window.removeEventListener("pagehide", handlePageHide);
     };
+    // The page-hide handler intentionally reads mutable refs so it can run with the latest draft without resubscribing on every edit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -176,8 +201,7 @@ export default function MessageWorkspacePage() {
       return false;
     } finally {
       inFlightRef.current = false;
-      if (savedCurrentVersion || !requestSucceeded) return;
-      if (pendingDraftRef.current && pendingVersionRef.current > requestVersion) {
+      if (!savedCurrentVersion && requestSucceeded && pendingDraftRef.current && pendingVersionRef.current > requestVersion) {
         void flushAutosave(action);
       }
     }
@@ -234,7 +258,10 @@ export default function MessageWorkspacePage() {
     pendingVersionRef.current = editVersionRef.current;
     setAutosaveStatus("dirty");
     if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = window.setTimeout(() => void flushAutosave(), 800);
+    saveTimerRef.current = window.setTimeout(() => {
+      saveTimerRef.current = null;
+      void flushAutosave();
+    }, 800);
   }
 
   function persistDraft(next: MessageDraft) {
