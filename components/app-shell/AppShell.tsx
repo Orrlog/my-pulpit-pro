@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { LogoutButton } from "./LogoutButton";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: "D" },
@@ -35,6 +36,7 @@ function NavLinks() {
           <span>{item.label}</span>
         </Link>
       ))}
+      <LogoutButton />
     </div>
   );
 }
@@ -56,7 +58,7 @@ export function AppShell({
           <div className="mt-6 rounded-2xl border border-line bg-background/70 p-3">
             <p className="text-xs font-bold uppercase tracking-[0.16em] text-gold">Preview mode</p>
             <p className="mt-2 text-xs font-semibold leading-5 text-muted">
-              Secure accounts, billing, saved projects, and message generation will be connected in
+              Secure account access is active. Billing, cloud project sync, and message generation will be connected in
               later phases.
             </p>
           </div>
