@@ -418,15 +418,26 @@ function BulletList({ bullets }: { bullets: string[] }) {
 function SectionLine({ label, value }: { label: string; value: string }) {
   if (!value) return null;
   return (
-    <div className="grid gap-1">
-      <p className="text-xs font-bold uppercase tracking-[0.12em] text-muted">{label}</p>
-      <p className="break-words text-base leading-7 text-ink">{value}</p>
-    </div>
+    <section className="mt-5 border-t border-line/80 pt-4">
+      <p className="text-sm font-extrabold uppercase tracking-[0.16em] text-teal">{label}</p>
+      <p className="mt-2 break-words text-base leading-7 text-ink">{value}</p>
+    </section>
   );
 }
 
 function NotesArea({ value, onChange }: { value: string; onChange: (value: string) => void }) {
-  return <TextArea label="My Notes" value={value} onChange={onChange} rows={3} placeholder="Add your notes here..." />;
+  return (
+    <section className="mt-5 border-t border-line/80 pt-4">
+      <TextArea
+        label="My Notes"
+        labelClassName="text-sm font-extrabold uppercase tracking-[0.16em] text-teal"
+        value={value}
+        onChange={onChange}
+        rows={3}
+        placeholder="Add your notes here..."
+      />
+    </section>
+  );
 }
 
 function DetailDrawer({ draft, panel, onClose, patchDraft, patchIntroduction, patchClosing, patchPoint }: { draft: MessageDraft; panel: Exclude<DetailPanel, null>; onClose: () => void; patchDraft: (patch: Partial<MessageDraft>) => void; patchIntroduction: (patch: Partial<MessageDraftIntroduction>) => void; patchClosing: (patch: Partial<MessageDraftClosing>) => void; patchPoint: (id: string, patch: Partial<MessageDraftPoint>) => void }) {
@@ -575,7 +586,7 @@ function RemovableList({ label, items, onChange, addLabel }: { label: string; it
   );
 }
 
-function TextArea({ label, value, onChange, rows = 4, placeholder }: { label: string; value: string; onChange: (value: string) => void; rows?: number; placeholder?: string }) {
+function TextArea({ label, value, onChange, rows = 4, placeholder, labelClassName = "text-sm font-bold text-ink" }: { label: string; value: string; onChange: (value: string) => void; rows?: number; placeholder?: string; labelClassName?: string }) {
   const ref = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
     const element = ref.current;
@@ -584,8 +595,8 @@ function TextArea({ label, value, onChange, rows = 4, placeholder }: { label: st
     element.style.height = `${element.scrollHeight}px`;
   }, [value]);
   return (
-    <label className="grid gap-2 text-sm font-bold text-ink">
-      {label}
+    <label className="grid gap-2">
+      <span className={labelClassName}>{label}</span>
       <textarea
         ref={ref}
         rows={rows}
