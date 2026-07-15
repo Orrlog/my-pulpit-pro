@@ -37,6 +37,7 @@ export default function MessageWorkspacePage() {
   const [draft, setDraft] = useState<MessageDraft | null | undefined>(undefined);
   const [detailPanel, setDetailPanel] = useState<DetailPanel>(null);
   const [printMode, setPrintMode] = useState<PrintMode>(null);
+  const draftRef = useRef<MessageDraft | null>(null);
 
   useEffect(() => {
     queueMicrotask(() => {
@@ -60,27 +61,61 @@ export default function MessageWorkspacePage() {
   }, []);
 
   useEffect(() => {
-    if (!draft) return;
-    window.localStorage.setItem(MESSAGE_DRAFT_STORAGE_KEY, JSON.stringify({ ...draft, updatedAt: new Date().toISOString() }));
+    draftRef.current = draft ?? null;
   }, [draft]);
 
+  useEffect(() => {
+    const handleAfterPrint = () => setPrintMode(null);
+    window.addEventListener("afterprint", handleAfterPrint);
+    return () => window.removeEventListener("afterprint", handleAfterPrint);
+  }, []);
+
+  function persistDraft(next: MessageDraft) {
+    const persisted = { ...next, updatedAt: new Date().toISOString() };
+    draftRef.current = persisted;
+    window.localStorage.setItem(MESSAGE_DRAFT_STORAGE_KEY, JSON.stringify(persisted));
+    return persisted;
+  }
+
+  function updateDraft(updater: (current: MessageDraft) => MessageDraft) {
+    setDraft((current) => {
+      if (!current) return current;
+      return persistDraft(updater(current));
+    });
+  }
+
   function patchDraft(patch: Partial<MessageDraft>) {
-    setDraft((current) => (current ? { ...current, ...patch, updatedAt: new Date().toISOString() } : current));
+    updateDraft((current) => ({ ...current, ...patch }));
   }
 
   function patchIntroduction(patch: Partial<MessageDraftIntroduction>) {
-    if (!draft) return;
-    patchDraft({ introduction: { ...draft.introduction, ...patch } });
+    updateDraft((current) => ({
+      ...current,
+      introduction: { ...current.introduction, ...patch },
+    }));
   }
 
   function patchClosing(patch: Partial<MessageDraftClosing>) {
-    if (!draft) return;
-    patchDraft({ closing: { ...draft.closing, ...patch } });
+    updateDraft((current) => ({
+      ...current,
+      closing: { ...current.closing, ...patch },
+    }));
+  }
+
+  function patchPoint(id: string, patch: Partial<MessageDraftPoint>) {
+    updateDraft((current) => ({
+      ...current,
+      points: updatePoint(current.points, id, patch),
+    }));
   }
 
   function print(mode: Exclude<PrintMode, null>) {
+    const activeElement = document.activeElement;
+    if (activeElement instanceof HTMLElement) activeElement.blur();
+
+    setDraft((current) => (current ? persistDraft(current) : current));
     setPrintMode(mode);
-    window.setTimeout(() => window.print(), 60);
+    window.setTimeout(() => window.print(), 120);
   }
 
   if (draft === undefined) {
@@ -122,21 +157,16 @@ export default function MessageWorkspacePage() {
         </section>
 
         <section className="rounded-[2rem] border border-line bg-cream-strong p-5 shadow-sm sm:p-7">
-          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
-            <div className="min-w-0">
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">Message Map</p>
-              <h1 className="mt-2 break-words font-serif text-4xl font-semibold leading-tight text-teal sm:text-5xl">{draft.title}</h1>
-              <p className="mt-4 text-sm font-bold uppercase tracking-[0.12em] text-muted">Main passage</p>
-              <p className="mt-1 break-words text-lg font-bold text-ink">{draft.mainScripture}</p>
-              <ScriptureText text={draft.mainScriptureText} />
-              <p className="mt-4 text-sm font-bold uppercase tracking-[0.12em] text-muted">Big idea</p>
-              <p className="mt-1 max-w-3xl text-lg leading-8 text-ink">{draft.bigIdea}</p>
-            </div>
-            <div className="flex flex-col gap-2 sm:min-w-60">
+          <div className="min-w-0">
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">Message Map</p>
+            <h1 className="mt-2 break-words font-serif text-4xl font-semibold leading-tight text-teal sm:text-5xl">{draft.title}</h1>
+            <p className="mt-4 text-sm font-bold uppercase tracking-[0.12em] text-muted">Main passage</p>
+            <p className="mt-1 break-words text-lg font-bold text-ink">{draft.mainScripture}</p>
+            <ScriptureText text={draft.mainScriptureText} />
+            <p className="mt-4 text-sm font-bold uppercase tracking-[0.12em] text-muted">Big idea</p>
+            <p className="mt-1 max-w-3xl text-lg leading-8 text-ink">{draft.bigIdea}</p>
+            <div className="mt-5 flex flex-wrap gap-2">
               <ActionButton onClick={() => setDetailPanel({ kind: "message" })}>Edit Message Details</ActionButton>
-              <ActionButton filled onClick={() => print("pulpit")}>Print Pulpit Notes</ActionButton>
-              <ActionButton gold onClick={() => print("full")}>Print Full Preparation Notes</ActionButton>
-              <p className="text-xs leading-5 text-muted">To remove the browser date, page URL, and page title, turn off “Headers and footers” in your browser’s print settings.</p>
             </div>
           </div>
         </section>
@@ -161,22 +191,22 @@ export default function MessageWorkspacePage() {
               key={point.id}
               point={point}
               number={index + 1}
-              onNotesChange={(notes) => patchDraft({ points: updatePoint(draft.points, point.id, { notes }) })}
+              onNotesChange={(notes) => patchPoint(point.id, { notes })}
               onEdit={() => setDetailPanel({ kind: "point", id: point.id })}
-              onKeep={() => patchDraft({ points: updatePoint(draft.points, point.id, { status: "kept" }) })}
+              onKeep={() => patchPoint(point.id, { status: "kept" })}
               onRewrite={() =>
-                patchDraft({
-                  points: updatePoint(draft.points, point.id, {
-                    status: "rewritten",
-                    summary: `This point keeps the message close to ${draft.mainScripture} and says it in a plainer way.`,
-                    bullets: point.bullets.map((bullet, bulletIndex) => (bulletIndex === 0 ? `${point.title} is not just an idea to admire; it is a truth to carry into ordinary life.` : bullet)),
-                    application: `${point.application} Let this truth shape one real decision before the day is over.`,
-                  }),
+                patchPoint(point.id, {
+                  status: "rewritten",
+                  summary: `This point keeps the message close to ${draft.mainScripture} and says it in a plainer way.`,
+                  bullets: point.bullets.map((bullet, bulletIndex) => (bulletIndex === 0 ? `${point.title} is not just an idea to admire; it is a truth to carry into ordinary life.` : bullet)),
+                  application: `${point.application} Let this truth shape one real decision before the day is over.`,
                 })
               }
               onRemove={() => {
-                if (draft.points.length === 1) return;
-                patchDraft({ points: draft.points.filter((item) => item.id !== point.id) });
+                updateDraft((current) => {
+                  if (current.points.length === 1) return current;
+                  return { ...current, points: current.points.filter((item) => item.id !== point.id) };
+                });
               }}
             />
           ))}
@@ -192,7 +222,7 @@ export default function MessageWorkspacePage() {
                 pastoralFocus: draft.pastoralFocus,
                 scriptureBank: draft.scriptureBank,
               })[0];
-              patchDraft({ points: [...draft.points, { ...next, id: `movement-${Date.now()}` }] });
+              updateDraft((current) => ({ ...current, points: [...current.points, { ...next, id: `movement-${Date.now()}` }] }));
             }}
             className="min-h-12 rounded-full bg-gold px-5 py-3 text-sm font-bold text-teal-dark transition hover:bg-gold/90 focus:outline-none focus:ring-2 focus:ring-gold focus:ring-offset-2"
           >
@@ -210,6 +240,20 @@ export default function MessageWorkspacePage() {
           onNotesChange={(notes) => patchClosing({ notes })}
           onEdit={() => setDetailPanel({ kind: "closing" })}
         />
+
+        <section className="rounded-[1.75rem] border border-line bg-cream-strong p-5 shadow-sm sm:p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">Print</p>
+              <h2 className="font-serif text-3xl font-semibold text-teal">Prepare printed notes</h2>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">To remove the browser date, page URL, and page title, turn off “Headers and footers” in your browser’s print settings.</p>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <ActionButton filled onClick={() => print("pulpit")}>Print Pulpit Notes</ActionButton>
+              <ActionButton gold onClick={() => print("full")}>Print Full Preparation Notes</ActionButton>
+            </div>
+          </div>
+        </section>
       </main>
 
       {detailPanel ? (
@@ -220,6 +264,7 @@ export default function MessageWorkspacePage() {
           patchDraft={patchDraft}
           patchIntroduction={patchIntroduction}
           patchClosing={patchClosing}
+          patchPoint={patchPoint}
         />
       ) : null}
     </AppShell>
@@ -325,7 +370,7 @@ function NotesArea({ value, onChange }: { value: string; onChange: (value: strin
   return <TextArea label="My Notes" value={value} onChange={onChange} rows={3} placeholder="Add your notes here..." />;
 }
 
-function DetailDrawer({ draft, panel, onClose, patchDraft, patchIntroduction, patchClosing }: { draft: MessageDraft; panel: Exclude<DetailPanel, null>; onClose: () => void; patchDraft: (patch: Partial<MessageDraft>) => void; patchIntroduction: (patch: Partial<MessageDraftIntroduction>) => void; patchClosing: (patch: Partial<MessageDraftClosing>) => void }) {
+function DetailDrawer({ draft, panel, onClose, patchDraft, patchIntroduction, patchClosing, patchPoint }: { draft: MessageDraft; panel: Exclude<DetailPanel, null>; onClose: () => void; patchDraft: (patch: Partial<MessageDraft>) => void; patchIntroduction: (patch: Partial<MessageDraftIntroduction>) => void; patchClosing: (patch: Partial<MessageDraftClosing>) => void; patchPoint: (id: string, patch: Partial<MessageDraftPoint>) => void }) {
   const point = panel.kind === "point" ? draft.points.find((item) => item.id === panel.id) : undefined;
   return (
     <div className="fixed inset-0 z-50 bg-ink/30 p-3 print:hidden" role="dialog" aria-modal="true">
@@ -341,7 +386,7 @@ function DetailDrawer({ draft, panel, onClose, patchDraft, patchIntroduction, pa
           {panel.kind === "message" ? <MessageDetails draft={draft} patchDraft={patchDraft} /> : null}
           {panel.kind === "introduction" ? <IntroductionDetails draft={draft} patchIntroduction={patchIntroduction} /> : null}
           {panel.kind === "closing" ? <ClosingDetails draft={draft} patchClosing={patchClosing} /> : null}
-          {point ? <PointDetails draft={draft} point={point} patchDraft={patchDraft} /> : null}
+          {point ? <PointDetails point={point} patchPoint={patchPoint} /> : null}
         </div>
       </div>
     </div>
@@ -401,21 +446,21 @@ function ClosingDetails({ draft, patchClosing }: { draft: MessageDraft; patchClo
   );
 }
 
-function PointDetails({ draft, point, patchDraft }: { draft: MessageDraft; point: MessageDraftPoint; patchDraft: (patch: Partial<MessageDraft>) => void }) {
-  const patchPoint = (patch: Partial<MessageDraftPoint>) => patchDraft({ points: updatePoint(draft.points, point.id, patch) });
+function PointDetails({ point, patchPoint }: { point: MessageDraftPoint; patchPoint: (id: string, patch: Partial<MessageDraftPoint>) => void }) {
+  const patchCurrentPoint = (patch: Partial<MessageDraftPoint>) => patchPoint(point.id, patch);
   return (
     <>
-      <TextArea label="Point title" value={point.title} onChange={(title) => patchPoint({ title })} rows={2} />
-      <TextArea label="One-line summary" value={point.summary} onChange={(summary) => patchPoint({ summary })} rows={2} />
-      <TextArea label="Primary Scripture reference" value={point.scripture} onChange={(scripture) => patchPoint({ scripture, scriptureText: getVerseText(scripture) })} rows={1} />
-      <TextArea label="Primary Scripture text" value={point.scriptureText} onChange={(scriptureText) => patchPoint({ scriptureText })} />
-      <BulletEditor label="Sermon bullets" bullets={point.bullets} onChange={(bullets) => patchPoint({ bullets })} />
-      <TextArea label="Longer explanation" value={point.explanation} onChange={(explanation) => patchPoint({ explanation })} />
-      <TextArea label="Short application" value={point.application} onChange={(application) => patchPoint({ application })} />
-      <BulletEditor label="Illustration ideas" bullets={point.illustrationOptions} onChange={(illustrationOptions) => patchPoint({ illustrationOptions })} addLabel="Add Illustration" />
-      <TextArea label="Transition" value={point.transition} onChange={(transition) => patchPoint({ transition })} />
-      <TextArea label="Optional response moment" value={point.optionalResponseMoment ?? ""} onChange={(optionalResponseMoment) => patchPoint({ optionalResponseMoment, includeOptionalResponse: Boolean(optionalResponseMoment) })} />
-      <TextArea label="Additional notes" value={point.notes} onChange={(notes) => patchPoint({ notes })} />
+      <TextArea label="Point title" value={point.title} onChange={(title) => patchCurrentPoint({ title })} rows={2} />
+      <TextArea label="One-line summary" value={point.summary} onChange={(summary) => patchCurrentPoint({ summary })} rows={2} />
+      <TextArea label="Primary Scripture reference" value={point.scripture} onChange={(scripture) => patchCurrentPoint({ scripture, scriptureText: getVerseText(scripture) })} rows={1} />
+      <TextArea label="Primary Scripture text" value={point.scriptureText} onChange={(scriptureText) => patchCurrentPoint({ scriptureText })} />
+      <BulletEditor label="Sermon bullets" bullets={point.bullets} onChange={(bullets) => patchCurrentPoint({ bullets })} />
+      <TextArea label="Longer explanation" value={point.explanation} onChange={(explanation) => patchCurrentPoint({ explanation })} />
+      <TextArea label="Short application" value={point.application} onChange={(application) => patchCurrentPoint({ application })} />
+      <BulletEditor label="Illustration ideas" bullets={point.illustrationOptions} onChange={(illustrationOptions) => patchCurrentPoint({ illustrationOptions })} addLabel="Add Illustration" />
+      <TextArea label="Transition" value={point.transition} onChange={(transition) => patchCurrentPoint({ transition })} />
+      <TextArea label="Optional response moment" value={point.optionalResponseMoment ?? ""} onChange={(optionalResponseMoment) => patchCurrentPoint({ optionalResponseMoment, includeOptionalResponse: Boolean(optionalResponseMoment) })} />
+      <TextArea label="Additional notes" value={point.notes} onChange={(notes) => patchCurrentPoint({ notes })} />
     </>
   );
 }
@@ -510,9 +555,9 @@ function PrintPulpitNotes({ draft, active }: { draft: MessageDraft; active: bool
   return (
     <article className={`${active ? "print:block" : "print:hidden"} hidden print:p-0 print:text-[10.5pt] print:leading-snug print:text-black`}>
       <PrintHeader draft={draft} />
-      <section className="mt-3 break-inside-avoid"><h2 className="text-sm font-bold">Introduction</h2><ul className="list-disc pl-5">{draft.introduction.bullets.slice(0, 3).map((b, i) => <li key={i}>{b}</li>)}</ul></section>
-      <section className="mt-3"><h2 className="text-sm font-bold">Pulpit Outline</h2>{draft.points.map((point, index) => <section key={point.id} className="break-inside-avoid border-t border-black/20 pt-2"><h3 className="font-bold">{index + 1}. {point.title}</h3><p className="text-xs font-semibold">{point.scripture}</p><p className="text-xs">{point.scriptureText}</p><ul className="mt-1 list-disc pl-5">{point.bullets.slice(0, 3).map((bullet, bulletIndex) => <li key={bulletIndex}>{bullet}</li>)}</ul><PrintLine label="Application" value={point.application} /><PrintLine label="Transition" value={point.transition} /><PrintLine label="Notes" value={point.notes} /></section>)}</section>
-      <section className="mt-3 break-inside-avoid border-t border-black/30 pt-2"><ul className="list-disc pl-5">{draft.closing.bullets.slice(0, 3).map((b, i) => <li key={i}>{b}</li>)}</ul><PrintLine label="Prayer cue" value={draft.closing.prayer} /></section>
+      <section className="mt-3 break-inside-avoid"><h2 className="text-sm font-bold">Introduction</h2><ul className="list-disc pl-5">{draft.introduction.bullets.slice(0, 3).map((b, i) => <li key={i}>{b}</li>)}</ul><PrintNotesBlock notes={draft.introduction.notes} /></section>
+      <section className="mt-3"><h2 className="text-sm font-bold">Pulpit Outline</h2>{draft.points.map((point, index) => <section key={point.id} className="break-inside-avoid border-t border-black/20 pt-2"><h3 className="font-bold">{index + 1}. {point.title}</h3><p className="text-xs font-semibold">{point.scripture}</p><p className="text-xs">{point.scriptureText}</p><ul className="mt-1 list-disc pl-5">{point.bullets.slice(0, 3).map((bullet, bulletIndex) => <li key={bulletIndex}>{bullet}</li>)}</ul><PrintLine label="Application" value={point.application} /><PrintLine label="Transition" value={point.transition} /><PrintNotesBlock notes={point.notes} /></section>)}</section>
+      <section className="mt-3 break-inside-avoid border-t border-black/30 pt-2"><ul className="list-disc pl-5">{draft.closing.bullets.slice(0, 3).map((b, i) => <li key={i}>{b}</li>)}</ul><PrintLine label="Prayer cue" value={draft.closing.prayer} /><PrintNotesBlock notes={draft.closing.notes} /></section>
     </article>
   );
 }
@@ -524,10 +569,24 @@ function PrintFullPreparationNotes({ draft, active }: { draft: MessageDraft; act
       {draft.contextNotes.length ? <section className="mt-4 break-inside-avoid"><h2 className="text-base font-bold">Passage Context</h2>{draft.contextNotes.filter(Boolean).map((note, index) => <p key={index}>{note}</p>)}</section> : null}
       {draft.pastoralCareNote ? <PrintLine label="Pastoral care note" value={draft.pastoralCareNote.text} /> : null}
       <section className="mt-4 break-inside-avoid"><h2 className="text-base font-bold">Scripture Bank</h2>{draft.scriptureBank.map((item) => <div key={item.id} className="break-inside-avoid"><p><strong>{item.reference}:</strong> {item.text}</p>{item.supportNote ? <p><strong>Supports:</strong> {item.supportNote}</p> : null}{item.fullContext ? <p><strong>Context:</strong> {item.fullContext}</p> : null}</div>)}</section>
-      <section className="mt-4 break-inside-avoid"><h2 className="text-base font-bold">Introduction</h2><ul className="list-disc pl-5">{draft.introduction.bullets.map((b, i) => <li key={i}>{b}</li>)}</ul><PrintLine label="Hook" value={draft.introduction.hook} /><PrintLine label="Transition" value={draft.introduction.firstMovementTransition} /><PrintLine label="Notes" value={draft.introduction.notes} /></section>
-      <section className="mt-4"><h2 className="text-base font-bold">Message Points</h2>{draft.points.map((point, index) => <section key={point.id} className="break-inside-avoid border-t border-black/20 pt-2"><h3 className="font-bold">{index + 1}. {point.title}</h3><p className="text-sm font-semibold">{point.scripture}</p><p className="text-sm">{point.scriptureText}</p><ul className="mt-1 list-disc pl-5">{point.bullets.map((bullet, bulletIndex) => <li key={bulletIndex}>{bullet}</li>)}</ul><PrintLine label="Explanation" value={point.explanation} /><PrintLine label="Application" value={point.application} />{point.illustrationOptions.length ? <PrintLine label="Illustration options" value={point.illustrationOptions.join(" | ")} /> : null}<PrintLine label="Transition" value={point.transition} /><PrintLine label="Notes" value={point.notes} /></section>)}</section>
-      <section className="mt-4 break-inside-avoid border-t border-black/30 pt-3"><h2 className="text-base font-bold">Closing</h2><ul className="list-disc pl-5">{draft.closing.bullets.map((b, i) => <li key={i}>{b}</li>)}</ul><PrintLine label="Application" value={draft.closing.closingApplication} /><PrintLine label="Prayer cue" value={draft.closing.prayer} /><PrintLine label="Notes" value={draft.closing.notes} /></section>
+      <section className="mt-4 break-inside-avoid"><h2 className="text-base font-bold">Introduction</h2><ul className="list-disc pl-5">{draft.introduction.bullets.map((b, i) => <li key={i}>{b}</li>)}</ul><PrintLine label="Hook" value={draft.introduction.hook} /><PrintLine label="Transition" value={draft.introduction.firstMovementTransition} /><PrintNotesBlock notes={draft.introduction.notes} /></section>
+      <section className="mt-4"><h2 className="text-base font-bold">Message Points</h2>{draft.points.map((point, index) => <section key={point.id} className="break-inside-avoid border-t border-black/20 pt-2"><h3 className="font-bold">{index + 1}. {point.title}</h3><p className="text-sm font-semibold">{point.scripture}</p><p className="text-sm">{point.scriptureText}</p><ul className="mt-1 list-disc pl-5">{point.bullets.map((bullet, bulletIndex) => <li key={bulletIndex}>{bullet}</li>)}</ul><PrintLine label="Explanation" value={point.explanation} /><PrintLine label="Application" value={point.application} />{point.illustrationOptions.length ? <PrintLine label="Illustration options" value={point.illustrationOptions.join(" | ")} /> : null}<PrintLine label="Transition" value={point.transition} /><PrintNotesBlock notes={point.notes} /></section>)}</section>
+      <section className="mt-4 break-inside-avoid border-t border-black/30 pt-3"><h2 className="text-base font-bold">Closing</h2><ul className="list-disc pl-5">{draft.closing.bullets.map((b, i) => <li key={i}>{b}</li>)}</ul><PrintLine label="Application" value={draft.closing.closingApplication} /><PrintLine label="Prayer cue" value={draft.closing.prayer} /><PrintNotesBlock notes={draft.closing.notes} /></section>
     </article>
+  );
+}
+
+function PrintNotesBlock({ notes }: { notes?: string }) {
+  return (
+    <div className="mt-2 break-inside-avoid">
+      <p className="text-xs font-bold uppercase tracking-[0.12em]">My Notes</p>
+      {notes ? <p className="mt-1 whitespace-pre-wrap">{notes}</p> : null}
+      <div className="mt-2 grid gap-3" aria-hidden="true">
+        <div className="h-4 border-b border-black/40" />
+        <div className="h-4 border-b border-black/40" />
+        <div className="h-4 border-b border-black/40" />
+      </div>
+    </div>
   );
 }
 
