@@ -164,6 +164,27 @@ const kjvLookup: Record<string, string> = {
   "Revelation 21:4": "And God shall wipe away all tears from their eyes; and there shall be no more death, neither sorrow, nor crying, neither shall there be any more pain: for the former things are passed away.",
 };
 
+const kjvPassageLookup: Record<string, string> = {
+  "Philippians 4:4-9": "4 Rejoice in the Lord alway: and again I say, Rejoice.\n5 Let your moderation be known unto all men. The Lord is at hand.\n6 Be careful for nothing; but in every thing by prayer and supplication with thanksgiving let your requests be made known unto God.\n7 And the peace of God, which passeth all understanding, shall keep your hearts and minds through Christ Jesus.\n8 Finally, brethren, whatsoever things are true, whatsoever things are honest, whatsoever things are just, whatsoever things are pure, whatsoever things are lovely, whatsoever things are of good report; if there be any virtue, and if there be any praise, think on these things.\n9 Those things, which ye have both learned, and received, and heard, and seen in me, do: and the God of peace shall be with you.",
+  "Joshua 1:1-9": "1 Now after the death of Moses the servant of the LORD it came to pass, that the LORD spake unto Joshua the son of Nun, Moses' minister, saying,\n2 Moses my servant is dead; now therefore arise, go over this Jordan, thou, and all this people, unto the land which I do give to them, even to the children of Israel.\n3 Every place that the sole of your foot shall tread upon, that have I given unto you, as I said unto Moses.\n4 From the wilderness and this Lebanon even unto the great river, the river Euphrates, all the land of the Hittites, and unto the great sea toward the going down of the sun, shall be your coast.\n5 There shall not any man be able to stand before thee all the days of thy life: as I was with Moses, so I will be with thee: I will not fail thee, nor forsake thee.\n6 Be strong and of a good courage: for unto this people shalt thou divide for an inheritance the land, which I sware unto their fathers to give them.\n7 Only be thou strong and very courageous, that thou mayest observe to do according to all the law, which Moses my servant commanded thee: turn not from it to the right hand or to the left, that thou mayest prosper whithersoever thou goest.\n8 This book of the law shall not depart out of thy mouth; but thou shalt meditate therein day and night, that thou mayest observe to do according to all that is written therein: for then thou shalt make thy way prosperous, and then thou shalt have good success.\n9 Have not I commanded thee? Be strong and of a good courage; be not afraid, neither be thou dismayed: for the LORD thy God is with thee whithersoever thou goest.",
+  "Galatians 6:7-10": "7 Be not deceived; God is not mocked: for whatsoever a man soweth, that shall he also reap.\n8 For he that soweth to his flesh shall of the flesh reap corruption; but he that soweth to the Spirit shall of the Spirit reap life everlasting.\n9 And let us not be weary in well doing: for in due season we shall reap, if we faint not.\n10 As we have therefore opportunity, let us do good unto all men, especially unto them who are of the household of faith.",
+  "Psalm 23": "1 The LORD is my shepherd; I shall not want.\n2 He maketh me to lie down in green pastures: he leadeth me beside the still waters.\n3 He restoreth my soul: he leadeth me in the paths of righteousness for his name's sake.\n4 Yea, though I walk through the valley of the shadow of death, I will fear no evil: for thou art with me; thy rod and thy staff they comfort me.\n5 Thou preparest a table before me in the presence of mine enemies: thou anointest my head with oil; my cup runneth over.\n6 Surely goodness and mercy shall follow me all the days of my life: and I will dwell in the house of the LORD for ever.",
+};
+
+const scriptureFallbacks: Record<string, string> = {
+  "Philippians 4:4-9": "Philippians 4:6",
+  "Joshua 1:1-9": "Joshua 1:9",
+  "Galatians 6:7-10": "Galatians 6:9",
+  "Psalm 23": "Psalm 23:4",
+};
+
+export type ScriptureTextResult = {
+  reference: string;
+  text: string;
+  available: boolean;
+  translation: "KJV" | "unavailable";
+};
+
 const scripturePools: Record<string, string[]> = {
   grief: ["Psalm 34:18", "John 11:35", "Matthew 5:4", "2 Corinthians 1:4", "1 Thessalonians 4:13", "Revelation 21:4", "Psalm 13:5", "1 Peter 5:10", "Romans 8:28", "Psalm 23:4"],
   forgiveness: ["Ephesians 4:32", "Colossians 3:13", "Matthew 18:22", "Romans 12:21", "Luke 23:34", "Psalm 103:12", "Micah 6:8", "2 Corinthians 5:18", "Proverbs 19:11", "Matthew 5:4"],
@@ -293,8 +314,48 @@ function movementSeedsFor(input: { mainScripture: string; directionTitle: string
   return defaultSeeds;
 }
 
+function parseSingleChapterRange(reference: string) {
+  const match = reference.trim().match(/^(.+?)\s+(\d+):(\d+)-(\d+)$/);
+  if (!match) return null;
+  const [, book, chapter, start, end] = match;
+  return { book, chapter, start: Number(start), end: Number(end) };
+}
+
+function assembleVerseRange(reference: string) {
+  const parsed = parseSingleChapterRange(reference);
+  if (!parsed || parsed.end < parsed.start) return null;
+  const verses: string[] = [];
+  for (let verse = parsed.start; verse <= parsed.end; verse += 1) {
+    const verseReference = `${parsed.book} ${parsed.chapter}:${verse}`;
+    const text = kjvLookup[verseReference];
+    if (!text) return null;
+    verses.push(`${verse} ${text}`);
+  }
+  return verses.join("\n");
+}
+
+export function resolveScriptureText(reference: string): ScriptureTextResult {
+  const normalized = reference.trim();
+  const storedPassage = kjvPassageLookup[normalized];
+  if (storedPassage) return { reference: normalized, text: storedPassage, available: true, translation: "KJV" };
+
+  const exactVerse = kjvLookup[normalized];
+  if (exactVerse) return { reference: normalized, text: exactVerse, available: true, translation: "KJV" };
+
+  const assembledRange = assembleVerseRange(normalized);
+  if (assembledRange) return { reference: normalized, text: assembledRange, available: true, translation: "KJV" };
+
+  const fallbackReference = scriptureFallbacks[normalized];
+  if (fallbackReference) {
+    const fallback = resolveScriptureText(fallbackReference);
+    if (fallback.available) return fallback;
+  }
+
+  return { reference: normalized, text: MISSING_VERSE_TEXT, available: false, translation: "unavailable" };
+}
+
 export function getVerseText(reference: string) {
-  return kjvLookup[reference.trim()] ?? MISSING_VERSE_TEXT;
+  return resolveScriptureText(reference).text;
 }
 
 function supportNoteFor(reference: string, input: { directionTitle: string; bigIdea: string }) {
@@ -411,6 +472,7 @@ export function buildIntroduction(input: {
   pastoralFocus: string;
 }): MessageDraftIntroduction {
   const angle = cleanSentence(input.angle);
+  const introScripture = resolveScriptureText(input.mainScripture);
   return {
     hook: `${input.directionTitle} starts where people feel the pressure of ordinary life and need a steady word from Scripture.`,
     pastoralTension: `${angle} The sermon should name that pressure honestly and then let the passage answer it with grace and truth.`,
@@ -422,8 +484,8 @@ export function buildIntroduction(input: {
       `${input.mainScripture} does not rush past the pressure. It gives the church a faithful way to see it.`,
       cleanSentence(input.bigIdea),
     ],
-    scripture: undefined,
-    scriptureText: undefined,
+    scripture: introScripture.available ? introScripture.reference : undefined,
+    scriptureText: introScripture.available ? introScripture.text : undefined,
     notes: "",
   };
 }
@@ -594,6 +656,11 @@ export function normalizeMessageDraft(raw: unknown): MessageDraft | null {
   const introduction = isIntroduction(legacy.introduction)
     ? { ...buildIntroduction(base), ...legacy.introduction }
     : { ...buildIntroduction(base), hook: typeof legacy.introduction === "string" ? legacy.introduction : buildIntroduction(base).hook };
+  const resolvedIntroductionScripture = resolveScriptureText(introduction.scripture || mainScripture);
+  if (!introduction.scripture || !introduction.scriptureText || introduction.scriptureText === MISSING_VERSE_TEXT) {
+    introduction.scripture = resolvedIntroductionScripture.available ? resolvedIntroductionScripture.reference : undefined;
+    introduction.scriptureText = resolvedIntroductionScripture.available ? resolvedIntroductionScripture.text : undefined;
+  }
   const closing = isClosing(legacy.closing)
     ? { ...buildClosing(base), ...legacy.closing }
     : { ...buildClosing(base), closingApplication: legacy.application ?? buildClosing(base).closingApplication, prayer: legacy.closingPrayer ?? buildClosing(base).prayer };
@@ -632,7 +699,7 @@ export function normalizeMessageDraft(raw: unknown): MessageDraft | null {
     messageModeLabel: legacy.messageModeLabel ?? "Sunday Sermon",
     directionTitle,
     mainScripture,
-    mainScriptureText: legacy.mainScriptureText ?? getVerseText(mainScripture),
+    mainScriptureText: legacy.mainScriptureText && legacy.mainScriptureText !== MISSING_VERSE_TEXT ? legacy.mainScriptureText : resolveScriptureText(mainScripture).text,
     bigIdea,
     angle,
     pastoralFocus,

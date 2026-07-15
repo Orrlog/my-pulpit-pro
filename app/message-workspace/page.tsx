@@ -399,7 +399,12 @@ function ScriptureBlock({ reference, text }: { reference: string; text?: string 
 }
 
 function ScriptureText({ text }: { text: string }) {
-  return <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-ink">“{text}”</p>;
+  return (
+    <div className="mt-2">
+      {text !== MISSING_VERSE_TEXT ? <p className="text-xs font-bold uppercase tracking-[0.12em] text-muted">KJV local text</p> : null}
+      <p className="whitespace-pre-wrap break-words text-sm leading-6 text-ink">“{text}”</p>
+    </div>
+  );
 }
 
 function BulletList({ bullets }: { bullets: string[] }) {
@@ -647,7 +652,7 @@ function PrintNotesBlock({ notes }: { notes?: string }) {
 }
 
 function PrintHeader({ draft }: { draft: MessageDraft }) {
-  return <header className="border-b border-black/30 pb-3"><p className="text-xs font-bold uppercase tracking-[0.16em]">My Pulpit Pro</p><h1 className="mt-2 text-2xl font-bold">{draft.title}</h1><p className="mt-1 font-semibold">Main passage: {draft.mainScripture}</p><p className="text-sm">{draft.mainScriptureText}</p><p className="mt-1">Big idea: {draft.bigIdea}</p><p className="mt-1 text-sm">{draft.lengthLabel} · {draft.translation}</p></header>;
+  return <header className="border-b border-black/30 pb-3"><p className="text-xs font-bold uppercase tracking-[0.16em]">My Pulpit Pro</p><h1 className="mt-2 text-2xl font-bold">{draft.title}</h1><p className="mt-1 font-semibold">Main passage: {draft.mainScripture}</p><p className="text-sm">{draft.mainScriptureText}</p><p className="mt-1">Big idea: {draft.bigIdea}</p><p className="mt-1 text-sm">{draft.lengthLabel} · Preferred translation: {draft.translation} · Local verse text shown in KJV where available</p></header>;
 }
 
 function PrintLine({ label, value }: { label: string; value?: string }) {
