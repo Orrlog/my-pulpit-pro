@@ -32,10 +32,10 @@ export function Navigation() {
 
         <div className="hidden items-center gap-4 lg:flex">
           <Link
-            href="/signup"
+            href="/login"
             className="text-sm font-bold text-cream-strong/88 transition hover:text-gold"
           >
-            Sign In
+            Log In
           </Link>
           <ButtonLink href="/signup" variant="gold" className="min-h-10 px-5 py-2">
             Start Free Trial
@@ -58,10 +58,10 @@ export function Navigation() {
                 </a>
               ))}
               <Link
-                href="/signup"
+                href="/login"
                 className="rounded-xl px-4 py-3 text-sm font-semibold text-ink hover:bg-background"
               >
-                Sign In
+                Log In
               </Link>
               <ButtonLink href="/signup" variant="gold" className="mt-2 w-full">
                 Start Free Trial
