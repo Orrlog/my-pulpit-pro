@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { getSupabasePublicConfig } from "./env";
 
 const publicRoutes = new Set(["/login", "/signup", "/forgot-password", "/reset-password", "/auth/callback"]);
 const protectedPrefixes = ["/dashboard", "/new-message", "/projects", "/message-workspace", "/settings"];
@@ -31,13 +32,12 @@ function redirectToLogin(request: NextRequest) {
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  const supabaseConfig = getSupabasePublicConfig();
   const { pathname } = request.nextUrl;
   const protectedRoute = hasProtectedPrefix(pathname);
   const publicRoute = isPublicRoute(pathname);
 
-  if (!supabaseUrl || !supabaseKey) {
+  if (!supabaseConfig) {
     if (protectedRoute) {
       return redirectToLogin(request);
     }
@@ -45,7 +45,7 @@ export async function updateSession(request: NextRequest) {
     return supabaseResponse;
   }
 
-  const supabase = createServerClient(supabaseUrl, supabaseKey, {
+  const supabase = createServerClient(supabaseConfig.url, supabaseConfig.publishableKey, {
     cookies: {
       getAll() {
         return request.cookies.getAll();
