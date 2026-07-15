@@ -70,3 +70,21 @@ The reset page uses the Supabase recovery session from the email link to update 
 ## Deployment note
 
 Do not manually redeploy through Vercel for this setup. GitHub branch deployments will pick up the existing Vercel environment variables for Production, Preview, and Development.
+
+After changing a Vercel environment-variable value, create a new GitHub branch deployment so the updated value is included in the new Preview build.
+
+## Profile table and owner role setup
+
+After applying the profile migration, Supabase will automatically create a `public.profiles` row for each new Auth user and backfill profile rows for Auth users who already existed before the migration.
+
+To promote the existing founder account to owner, use the Supabase SQL Editor after applying the migration. Replace the placeholder email below with the founder account email before running it:
+
+```sql
+update public.profiles
+set role = 'owner'
+where email = 'founder@example.com';
+```
+
+Only run this in the Supabase dashboard with an authorized project administrator. Do not commit private email addresses, user UUIDs, passwords, API keys, service-role keys, or other secrets to the repository.
+
+After the founder account is promoted to `owner`, role changes should be made intentionally and sparingly. Ordinary members can update their own profile name, but they cannot assign themselves elevated roles.
