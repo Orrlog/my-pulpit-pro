@@ -9,6 +9,13 @@ Vercel already has these public browser-safe variables configured for Production
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
 
+When editing these values in Vercel, paste only the raw value into the value field:
+
+- For `NEXT_PUBLIC_SUPABASE_URL`, paste only the raw Supabase Project URL, such as `https://example-project-ref.supabase.co`.
+- For `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, paste only the raw publishable key string.
+
+Do not paste the environment-variable name, an equals sign, quotation marks, backticks, surrounding code block fences, or a full `.env` line into the Vercel value field. For example, do not paste `NEXT_PUBLIC_SUPABASE_URL=https://...`; paste only `https://...`.
+
 Never expose or commit private Supabase secrets. Do not add a service-role key to the frontend, Vercel public variables, or this repository.
 
 ## Supabase dashboard settings
