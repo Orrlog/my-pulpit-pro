@@ -1,6 +1,6 @@
 import { cleanMessageDraft, normalizeMessageDraft, type MessageDraft } from "@/components/app-shell/message-draft-storage";
 import { createClient } from "@/lib/supabase/server";
-import type { MessageProject, MessageProjectResult, MessageProjectStatus } from "./types";
+import type { MessageProject, MessageProjectImportMetadata, MessageProjectResult, MessageProjectStatus } from "./types";
 
 type ProjectRow = {
   id: string;
@@ -58,6 +58,22 @@ function rowToProject(row: ProjectRow): MessageProject | null {
   };
 }
 
+function isProjectStatus(value: unknown): value is MessageProjectStatus {
+  return value === "Draft" || value === "Saved";
+}
+
+function validTimestamp(value: unknown) {
+  if (typeof value !== "string") return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+async function loadImportedProject(supabase: Awaited<ReturnType<typeof createClient>>, userId: string, legacyLocalId: string) {
+  const { data, error } = await supabase.from("message_projects").select("*").eq("user_id", userId).eq("legacy_local_id", legacyLocalId).maybeSingle();
+  if (error || !data) return null;
+  return rowToProject(data as ProjectRow);
+}
+
 function metadata(draft: MessageDraft) {
   return {
     title: draft.title?.trim() || "Untitled Message",
@@ -88,32 +104,38 @@ export async function getMessageProject(id: string): Promise<MessageProjectResul
   return project ? { data: project, error: null } : safeError("This message could not be loaded.", 500);
 }
 
-export async function createMessageProject(rawDraft: unknown, legacyLocalId?: string | null): Promise<MessageProjectResult<MessageProject>> {
+export async function createMessageProject(rawDraft: unknown, legacyLocalId?: string | null, importMetadata?: MessageProjectImportMetadata): Promise<MessageProjectResult<MessageProject>> {
   const { supabase, user } = await getUserAndClient();
   if (!user) return safeError("Please sign in to create a message.", 401);
   const cleanLegacyId = legacyLocalId?.trim() || null;
   if (cleanLegacyId) {
-    const existing = await supabase.from("message_projects").select("*").eq("user_id", user.id).eq("legacy_local_id", cleanLegacyId).maybeSingle();
-    if (existing.error) return safeError();
-    if (existing.data) {
-      const project = rowToProject(existing.data as ProjectRow);
-      if (project) return { data: project, error: null };
-    }
+    const project = await loadImportedProject(supabase, user.id, cleanLegacyId);
+    if (project) return { data: project, error: null };
   }
   const now = new Date().toISOString();
   const initialDraft = deriveDraft(rawDraft, undefined, { createdAt: now, updatedAt: now });
   if (!initialDraft) return safeError("This message draft could not be read.", 400);
+  const importedStatus = cleanLegacyId && isProjectStatus(importMetadata?.status) ? importMetadata.status : "Draft";
+  const importedSavedAt = cleanLegacyId && importedStatus === "Saved" ? validTimestamp(importMetadata?.savedAt) : null;
   const { data: inserted, error: insertError } = await supabase.from("message_projects").insert({
     user_id: user.id,
     legacy_local_id: cleanLegacyId,
     ...metadata(initialDraft),
+    status: importedStatus,
+    saved_at: importedSavedAt,
     draft: initialDraft,
   }).select("*").single();
-  if (insertError || !inserted) return safeError("This message could not be created right now.", 500);
+  if (insertError || !inserted) {
+    if (cleanLegacyId) {
+      const project = await loadImportedProject(supabase, user.id, cleanLegacyId);
+      if (project) return { data: project, error: null };
+    }
+    return safeError("This message could not be created right now.", 500);
+  }
   const row = inserted as ProjectRow;
   const projectDraft = deriveDraft(initialDraft, row.id, { createdAt: row.created_at, updatedAt: row.updated_at });
   if (!projectDraft) return safeError("This message could not be created right now.", 500);
-  const { data: updated, error: updateError } = await supabase.from("message_projects").update({ draft: projectDraft, ...metadata(projectDraft) }).eq("id", row.id).eq("user_id", user.id).select("*").single();
+  const { data: updated, error: updateError } = await supabase.from("message_projects").update({ draft: projectDraft, ...metadata(projectDraft), status: importedStatus, saved_at: importedSavedAt }).eq("id", row.id).eq("user_id", user.id).select("*").single();
   if (updateError || !updated) return safeError("This message could not be created right now.", 500);
   const project = rowToProject(updated as ProjectRow);
   return project ? { data: project, error: null } : safeError("This message could not be created right now.", 500);

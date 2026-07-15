@@ -35,6 +35,7 @@ export default function MessageWorkspacePage() {
   const [projectId, setProjectId] = useState<string | null>(null);
   const [projectStatus, setProjectStatus] = useState<MessageProjectStatus>("Draft");
   const [saveMessage, setSaveMessage] = useState("");
+  const [loadError, setLoadError] = useState("");
   const [autosaveStatus, setAutosaveStatus] = useState<"saved" | "dirty" | "saving" | "failed">("saved");
   const [detailPanel, setDetailPanel] = useState<DetailPanel>(null);
   const [printMode, setPrintMode] = useState<PrintMode>(null);
@@ -43,6 +44,7 @@ export default function MessageWorkspacePage() {
   const saveTimerRef = useRef<number | null>(null);
   const inFlightRef = useRef(false);
   const pendingDraftRef = useRef<MessageDraft | null>(null);
+  const pendingVersionRef = useRef(0);
   const editVersionRef = useRef(0);
   const savedVersionRef = useRef(0);
 
@@ -55,7 +57,7 @@ export default function MessageWorkspacePage() {
         const payload = (await response.json()) as { project?: MessageProject; projects?: MessageProject[]; error?: string };
         if (cancelled) return;
         if (!response.ok) {
-          setSaveMessage(payload.error ?? "No message found.");
+          setLoadError(payload.error ?? "No message found.");
           setDraft(null);
           return;
         }
@@ -72,13 +74,19 @@ export default function MessageWorkspacePage() {
         savedVersionRef.current = editVersionRef.current;
       } catch {
         if (!cancelled) {
-          setSaveMessage("Message projects are unavailable right now.");
+          setLoadError("Message projects are unavailable right now.");
           setDraft(null);
         }
       }
     }
     void loadProject();
     return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
+    };
   }, []);
 
   useEffect(() => {
@@ -93,7 +101,7 @@ export default function MessageWorkspacePage() {
     function finalSave() {
       const activeProjectId = projectIdRef.current;
       const pending = pendingDraftRef.current;
-      if (!activeProjectId || !pending) return;
+      if (!activeProjectId || !pending || inFlightRef.current) return;
       try {
         void fetch(`/api/message-projects/${activeProjectId}`, {
           method: "PATCH",
@@ -132,31 +140,98 @@ export default function MessageWorkspacePage() {
     return payload.project;
   }
 
-  async function flushAutosave(action?: "save") {
-    if (inFlightRef.current) return;
+  async function waitForInFlight() {
+    while (inFlightRef.current) {
+      await new Promise((resolve) => window.setTimeout(resolve, 50));
+    }
+  }
+
+  async function savePendingDraft(action?: "save") {
+    if (inFlightRef.current) return false;
     const nextDraft = pendingDraftRef.current;
-    if (!nextDraft) return;
-    const requestVersion = editVersionRef.current;
+    const requestVersion = pendingVersionRef.current;
+    if (!nextDraft || !requestVersion) return true;
+
     inFlightRef.current = true;
     setAutosaveStatus("saving");
+    let savedCurrentVersion = false;
+    let requestSucceeded = false;
+
     try {
       const project = await sendDraft(nextDraft, action);
-      if (project && requestVersion === editVersionRef.current) {
+      requestSucceeded = true;
+      if (project && requestVersion === pendingVersionRef.current) {
         pendingDraftRef.current = null;
+        pendingVersionRef.current = 0;
+      }
+      if (project && requestVersion === editVersionRef.current) {
         savedVersionRef.current = requestVersion;
         setProjectStatus(project.status);
         setAutosaveStatus("saved");
+        savedCurrentVersion = true;
       }
+      return true;
     } catch {
       setAutosaveStatus("failed");
+      return false;
     } finally {
       inFlightRef.current = false;
-      if (pendingDraftRef.current && savedVersionRef.current !== editVersionRef.current) void flushAutosave();
+      if (savedCurrentVersion || !requestSucceeded) return;
+      if (pendingDraftRef.current && pendingVersionRef.current > requestVersion) {
+        void flushAutosave(action);
+      }
+    }
+  }
+
+  async function flushAutosave(action?: "save") {
+    await savePendingDraft(action);
+  }
+
+  async function saveLatestAndMarkSaved() {
+    if (saveTimerRef.current) {
+      window.clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+
+    setSaveMessage("");
+    setAutosaveStatus("saving");
+
+    while (true) {
+      await waitForInFlight();
+      const latest = draftRef.current;
+      if (!latest || !projectIdRef.current) return false;
+
+      const requestVersion = editVersionRef.current;
+      pendingDraftRef.current = latest;
+      pendingVersionRef.current = requestVersion;
+
+      inFlightRef.current = true;
+      try {
+        const project = await sendDraft(latest, "save");
+        if (project && requestVersion === pendingVersionRef.current) {
+          pendingDraftRef.current = null;
+          pendingVersionRef.current = 0;
+        }
+        if (project) setProjectStatus(project.status);
+        if (requestVersion === editVersionRef.current) {
+          savedVersionRef.current = requestVersion;
+          setAutosaveStatus("saved");
+          setSaveMessage("Message saved");
+          return true;
+        }
+      } catch {
+        setAutosaveStatus("failed");
+        setSaveMessage("Save failed. Try again.");
+        return false;
+      } finally {
+        inFlightRef.current = false;
+      }
     }
   }
 
   function scheduleAutosave(nextDraft: MessageDraft) {
     pendingDraftRef.current = nextDraft;
+    pendingVersionRef.current = editVersionRef.current;
     setAutosaveStatus("dirty");
     if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
     saveTimerRef.current = window.setTimeout(() => void flushAutosave(), 800);
@@ -224,7 +299,8 @@ export default function MessageWorkspacePage() {
     return (
       <AppShell title="No message found">
         <section className="rounded-3xl border border-line bg-cream-strong p-6">
-          <p className="text-muted">Create a message from the direction wizard to open a message in your account.</p>
+          {loadError ? <p className="text-muted">{loadError}</p> : null}
+          <p className="mt-2 text-muted">Create a message from the direction wizard to open a message in your account.</p>
           <Link href="/new-message" className="mt-5 inline-flex min-h-11 items-center rounded-full bg-teal px-5 py-2 text-sm font-bold text-cream-strong">
             Back to Directions
           </Link>
@@ -343,32 +419,13 @@ export default function MessageWorkspacePage() {
               <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">Autosave keeps this message protected in your account. Use Save Message when you want to mark the project as Saved.</p>
               <p className="mt-2 text-sm font-bold text-teal">{autosaveStatus === "dirty" ? "Unsaved changes" : autosaveStatus === "saving" ? "Saving..." : autosaveStatus === "failed" ? "Save failed. Try again." : "All changes saved"}</p>
               {saveMessage ? <p className="mt-2 text-sm font-bold text-teal">{saveMessage}</p> : null}
+              {autosaveStatus === "failed" ? (
+                <button type="button" onClick={() => void flushAutosave()} className="mt-3 min-h-10 rounded-full border border-line bg-background px-4 py-2 text-sm font-bold text-teal focus:outline-none focus:ring-2 focus:ring-gold">
+                  Retry Save
+                </button>
+              ) : null}
             </div>
-            <ActionButton filled onClick={async () => {
-              const latest = draftRef.current;
-              if (!latest || !projectId) return;
-              setSaveMessage("");
-              setAutosaveStatus("saving");
-              pendingDraftRef.current = latest;
-              try {
-                while (inFlightRef.current) {
-                  await new Promise((resolve) => window.setTimeout(resolve, 50));
-                }
-                inFlightRef.current = true;
-                const project = await sendDraft(latest, "save");
-                if (project) {
-                  pendingDraftRef.current = null;
-                  setProjectStatus(project.status);
-                  setAutosaveStatus("saved");
-                  setSaveMessage("Message saved");
-                }
-              } catch {
-                setAutosaveStatus("failed");
-                setSaveMessage("Save failed. Try again.");
-              } finally {
-                inFlightRef.current = false;
-              }
-            }}>Save Message</ActionButton>
+            <ActionButton filled onClick={() => void saveLatestAndMarkSaved()}>Save Message</ActionButton>
           </div>
         </section>
 

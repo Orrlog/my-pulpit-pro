@@ -80,7 +80,7 @@ export default function ProjectsPage() {
         const response = await fetch("/api/message-projects", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ draft: project.draft, legacyLocalId: project.id }),
+          body: JSON.stringify({ draft: project.draft, legacyLocalId: project.id, importMetadata: { status: project.status, savedAt: project.savedAt ?? null } }),
         });
         const payload = (await response.json()) as { project?: MessageProject; error?: string };
         if (!response.ok || !payload.project) throw new Error(payload.error);

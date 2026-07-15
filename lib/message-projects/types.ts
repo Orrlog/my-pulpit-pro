@@ -17,6 +17,11 @@ export type MessageProject = {
   draft: MessageDraft;
 };
 
+export type MessageProjectImportMetadata = {
+  status?: MessageProjectStatus;
+  savedAt?: string | null;
+};
+
 export type MessageProjectResult<T> =
   | { data: T; error: null; status?: number }
   | { data: null; error: string; status: number };
