@@ -97,7 +97,7 @@ const pulpitPro = [
 
 const soloFeatures = [
   "One named user",
-  "Eight created message projects per billing month",
+  "Ten created message projects per billing month",
   "Unlimited message-idea browsing",
   "Three sermon starting paths",
   "30, 45, and 60-minute options",
