@@ -71,6 +71,8 @@ The reset page uses the Supabase recovery session from the email link to update 
 
 Do not manually redeploy through Vercel for this setup. GitHub branch deployments will pick up the existing Vercel environment variables for Production, Preview, and Development.
 
+After changing a Vercel environment-variable value, create a new GitHub branch deployment so the updated value is included in the new Preview build.
+
 ## Profile table and owner role setup
 
 After applying the profile migration, Supabase will automatically create a `public.profiles` row for each new Auth user and backfill profile rows for Auth users who already existed before the migration.
