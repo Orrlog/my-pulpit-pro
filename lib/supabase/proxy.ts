@@ -8,16 +8,40 @@ function hasProtectedPrefix(pathname: string) {
   return protectedPrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
 }
 
+function isPublicRoute(pathname: string) {
+  return publicRoutes.has(pathname);
+}
+
 function isSafeRelativePath(path: string | null) {
   return Boolean(path && path.startsWith("/") && !path.startsWith("//") && !path.startsWith("/auth/callback"));
+}
+
+function redirectToLogin(request: NextRequest) {
+  const loginUrl = request.nextUrl.clone();
+  loginUrl.pathname = "/login";
+  loginUrl.search = "";
+
+  const nextPath = `${request.nextUrl.pathname}${request.nextUrl.search}`;
+  if (isSafeRelativePath(nextPath)) {
+    loginUrl.searchParams.set("next", nextPath);
+  }
+
+  return NextResponse.redirect(loginUrl);
 }
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  const { pathname } = request.nextUrl;
+  const protectedRoute = hasProtectedPrefix(pathname);
+  const publicRoute = isPublicRoute(pathname);
 
   if (!supabaseUrl || !supabaseKey) {
+    if (protectedRoute) {
+      return redirectToLogin(request);
+    }
+
     return supabaseResponse;
   }
 
@@ -34,21 +58,24 @@ export async function updateSession(request: NextRequest) {
     },
   });
 
-  const { data: { user } } = await supabase.auth.getUser();
-  const { pathname, search } = request.nextUrl;
+  let isAuthenticated = false;
 
-  if (!user && hasProtectedPrefix(pathname)) {
-    const loginUrl = request.nextUrl.clone();
-    loginUrl.pathname = "/login";
-    loginUrl.search = "";
-    const nextPath = `${pathname}${search}`;
-    if (isSafeRelativePath(nextPath)) {
-      loginUrl.searchParams.set("next", nextPath);
+  try {
+    const { data, error } = await supabase.auth.getClaims();
+    isAuthenticated = !error && Boolean(data?.claims);
+  } catch {
+    if (protectedRoute) {
+      return redirectToLogin(request);
     }
-    return NextResponse.redirect(loginUrl);
+
+    return supabaseResponse;
   }
 
-  if (user && publicRoutes.has(pathname)) {
+  if (!isAuthenticated && protectedRoute) {
+    return redirectToLogin(request);
+  }
+
+  if (isAuthenticated && publicRoute) {
     const next = request.nextUrl.searchParams.get("next");
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = isSafeRelativePath(next) ? next! : "/dashboard";
