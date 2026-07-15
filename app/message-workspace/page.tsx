@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AppShell } from "@/components/app-shell/AppShell";
 import {
@@ -45,7 +44,6 @@ function updateScriptureItem(items: ScriptureBankItem[], id: string, patch: Part
 }
 
 export default function MessageWorkspacePage() {
-  const searchParams = useSearchParams();
   const [draft, setDraft] = useState<MessageDraft | null | undefined>(undefined);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [projectStatus, setProjectStatus] = useState<MessageProjectStatus>("Draft");
@@ -58,7 +56,7 @@ export default function MessageWorkspacePage() {
   useEffect(() => {
     queueMicrotask(() => {
       const projects = ensureProjectLibrary();
-      const requestedProjectId = searchParams.get("project");
+      const requestedProjectId = new URLSearchParams(window.location.search).get("project");
       const fallbackProjectId = requestedProjectId ?? getActiveProjectId() ?? projects[0]?.id ?? null;
       const project = fallbackProjectId ? getProject(fallbackProjectId) : null;
 
@@ -88,7 +86,7 @@ export default function MessageWorkspacePage() {
         setDraft(null);
       }
     });
-  }, [searchParams]);
+  }, []);
 
   useEffect(() => {
     draftRef.current = draft ?? null;
