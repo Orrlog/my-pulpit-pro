@@ -1,29 +1,58 @@
 import { AppShell } from "@/components/app-shell/AppShell";
+import { getCurrentProfile } from "@/lib/profiles/current-profile";
+import { updateProfileName } from "./actions";
 
 export const metadata = {
   title: "Settings | My Pulpit Pro",
 };
 
-export default function SettingsPage() {
+export default async function SettingsPage() {
+  const profile = await getCurrentProfile();
+
   return (
     <AppShell title="Settings">
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="premium-card rounded-3xl border border-line bg-cream-strong p-6">
           <h2 className="text-xl font-bold text-ink">Profile</h2>
-          <div className="mt-5 grid gap-4">
+          <form action={updateProfileName} className="mt-5 grid gap-4">
             <div className="grid gap-2">
               <label htmlFor="profile-name" className="text-sm font-bold text-ink">
                 Name
               </label>
-              <input id="profile-name" defaultValue="Preview Pastor" className="min-h-12 rounded-2xl border border-line bg-background px-4" />
+              <input
+                id="profile-name"
+                name="fullName"
+                defaultValue={profile?.fullName ?? ""}
+                placeholder="Add your name"
+                className="min-h-12 rounded-2xl border border-line bg-background px-4"
+              />
             </div>
             <div className="grid gap-2">
               <label htmlFor="profile-email" className="text-sm font-bold text-ink">
                 Email
               </label>
-              <input id="profile-email" defaultValue="pastor@example.com" className="min-h-12 rounded-2xl border border-line bg-background px-4" />
+              <input
+                id="profile-email"
+                value={profile?.email ?? ""}
+                readOnly
+                className="min-h-12 rounded-2xl border border-line bg-background px-4 text-muted"
+              />
             </div>
-          </div>
+            <div className="grid gap-2">
+              <label htmlFor="profile-role" className="text-sm font-bold text-ink">
+                Account role
+              </label>
+              <input
+                id="profile-role"
+                value={profile?.role ?? "member"}
+                readOnly
+                className="min-h-12 rounded-2xl border border-line bg-background px-4 capitalize text-muted"
+              />
+            </div>
+            <button className="min-h-11 rounded-full bg-teal px-5 py-2 text-sm font-bold text-cream-strong focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-gold">
+              Save Profile
+            </button>
+          </form>
         </section>
 
         <section className="premium-card rounded-3xl border border-line bg-cream-strong p-6">
