@@ -4,29 +4,16 @@ import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AppShell } from "@/components/app-shell/AppShell";
 import {
-  LEGACY_MESSAGE_DRAFT_STORAGE_KEY,
-  MESSAGE_DRAFT_STORAGE_KEY,
   MISSING_VERSE_TEXT,
-  PREVIOUS_MESSAGE_DRAFT_STORAGE_KEY,
   buildInitialPoints,
   getVerseText,
-  normalizeMessageDraft,
   type MessageDraft,
   type MessageDraftClosing,
   type MessageDraftIntroduction,
   type MessageDraftPoint,
   type ScriptureBankItem,
 } from "@/components/app-shell/message-draft-storage";
-import {
-  ensureProjectLibrary,
-  getActiveProjectId,
-  getProject,
-  markProjectSaved,
-  persistCompatibilityDraft,
-  setActiveProjectId,
-  updateProjectDraft,
-  type MessageProjectStatus,
-} from "@/components/app-shell/message-project-library";
+import type { MessageProject, MessageProjectStatus } from "@/lib/message-projects/types";
 
 type PrintMode = "pulpit" | "full" | null;
 type DetailPanel = { kind: "message" } | { kind: "introduction" } | { kind: "point"; id: string } | { kind: "closing" } | null;
@@ -48,44 +35,50 @@ export default function MessageWorkspacePage() {
   const [projectId, setProjectId] = useState<string | null>(null);
   const [projectStatus, setProjectStatus] = useState<MessageProjectStatus>("Draft");
   const [saveMessage, setSaveMessage] = useState("");
+  const [autosaveStatus, setAutosaveStatus] = useState<"saved" | "dirty" | "saving" | "failed">("saved");
   const [detailPanel, setDetailPanel] = useState<DetailPanel>(null);
   const [printMode, setPrintMode] = useState<PrintMode>(null);
   const draftRef = useRef<MessageDraft | null>(null);
   const projectIdRef = useRef<string | null>(null);
+  const saveTimerRef = useRef<number | null>(null);
+  const inFlightRef = useRef(false);
+  const pendingDraftRef = useRef<MessageDraft | null>(null);
+  const editVersionRef = useRef(0);
+  const savedVersionRef = useRef(0);
 
   useEffect(() => {
-    queueMicrotask(() => {
-      const projects = ensureProjectLibrary();
+    let cancelled = false;
+    async function loadProject() {
       const requestedProjectId = new URLSearchParams(window.location.search).get("project");
-      const fallbackProjectId = requestedProjectId ?? getActiveProjectId() ?? projects[0]?.id ?? null;
-      const project = fallbackProjectId ? getProject(fallbackProjectId) : null;
-
-      if (project) {
+      try {
+        const response = await fetch(requestedProjectId ? `/api/message-projects/${requestedProjectId}` : "/api/message-projects?limit=1", { cache: "no-store" });
+        const payload = (await response.json()) as { project?: MessageProject; projects?: MessageProject[]; error?: string };
+        if (cancelled) return;
+        if (!response.ok) {
+          setSaveMessage(payload.error ?? "No message found.");
+          setDraft(null);
+          return;
+        }
+        const project = payload.project ?? payload.projects?.[0] ?? null;
+        if (!project) {
+          setDraft(null);
+          return;
+        }
         setDraft(project.draft);
         setProjectId(project.id);
         setProjectStatus(project.status);
-        setActiveProjectId(project.id);
-        persistCompatibilityDraft(project.draft);
-        return;
-      }
-
-      const raw =
-        window.localStorage.getItem(MESSAGE_DRAFT_STORAGE_KEY) ??
-        window.localStorage.getItem(PREVIOUS_MESSAGE_DRAFT_STORAGE_KEY) ??
-        window.localStorage.getItem(LEGACY_MESSAGE_DRAFT_STORAGE_KEY);
-      if (!raw) {
-        setDraft(null);
-        return;
-      }
-
-      try {
-        const upgraded = normalizeMessageDraft(JSON.parse(raw));
-        setDraft(upgraded);
-        if (upgraded) persistCompatibilityDraft(upgraded);
+        draftRef.current = project.draft;
+        projectIdRef.current = project.id;
+        savedVersionRef.current = editVersionRef.current;
       } catch {
-        setDraft(null);
+        if (!cancelled) {
+          setSaveMessage("Message projects are unavailable right now.");
+          setDraft(null);
+        }
       }
-    });
+    }
+    void loadProject();
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
@@ -97,20 +90,84 @@ export default function MessageWorkspacePage() {
   }, [projectId]);
 
   useEffect(() => {
+    function finalSave() {
+      const activeProjectId = projectIdRef.current;
+      const pending = pendingDraftRef.current;
+      if (!activeProjectId || !pending) return;
+      try {
+        void fetch(`/api/message-projects/${activeProjectId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ draft: pending }),
+          keepalive: true,
+        });
+      } catch {}
+    }
+    function handleVisibilityChange() { if (document.visibilityState === "hidden") finalSave(); }
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("pagehide", finalSave);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("pagehide", finalSave);
+    };
+  }, []);
+
+  useEffect(() => {
     const handleAfterPrint = () => setPrintMode(null);
     window.addEventListener("afterprint", handleAfterPrint);
     return () => window.removeEventListener("afterprint", handleAfterPrint);
   }, []);
 
+  async function sendDraft(nextDraft: MessageDraft, action?: "save", keepalive = false) {
+    const activeProjectId = projectIdRef.current;
+    if (!activeProjectId) return null;
+    const response = await fetch(`/api/message-projects/${activeProjectId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ draft: nextDraft, action }),
+      keepalive,
+    });
+    const payload = (await response.json()) as { project?: MessageProject; error?: string };
+    if (!response.ok || !payload.project) throw new Error(payload.error ?? "Save failed. Try again.");
+    return payload.project;
+  }
+
+  async function flushAutosave(action?: "save") {
+    if (inFlightRef.current) return;
+    const nextDraft = pendingDraftRef.current;
+    if (!nextDraft) return;
+    const requestVersion = editVersionRef.current;
+    inFlightRef.current = true;
+    setAutosaveStatus("saving");
+    try {
+      const project = await sendDraft(nextDraft, action);
+      if (project && requestVersion === editVersionRef.current) {
+        pendingDraftRef.current = null;
+        savedVersionRef.current = requestVersion;
+        setProjectStatus(project.status);
+        setAutosaveStatus("saved");
+      }
+    } catch {
+      setAutosaveStatus("failed");
+    } finally {
+      inFlightRef.current = false;
+      if (pendingDraftRef.current && savedVersionRef.current !== editVersionRef.current) void flushAutosave();
+    }
+  }
+
+  function scheduleAutosave(nextDraft: MessageDraft) {
+    pendingDraftRef.current = nextDraft;
+    setAutosaveStatus("dirty");
+    if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = window.setTimeout(() => void flushAutosave(), 800);
+  }
+
   function persistDraft(next: MessageDraft) {
     const activeProjectId = projectIdRef.current;
     const persisted = { ...next, id: activeProjectId ?? next.id, updatedAt: new Date().toISOString() };
+    editVersionRef.current += 1;
     draftRef.current = persisted;
-    persistCompatibilityDraft(persisted);
-    if (activeProjectId) {
-      updateProjectDraft(activeProjectId, persisted);
-      setActiveProjectId(activeProjectId);
-    }
+    scheduleAutosave(persisted);
     return persisted;
   }
 
@@ -158,16 +215,16 @@ export default function MessageWorkspacePage() {
   if (draft === undefined) {
     return (
       <AppShell title="Loading message workspace">
-        <p className="text-muted">Loading local draft...</p>
+        <p className="text-muted">Loading message...</p>
       </AppShell>
     );
   }
 
   if (!draft) {
     return (
-      <AppShell title="No local draft found">
+      <AppShell title="No message found">
         <section className="rounded-3xl border border-line bg-cream-strong p-6">
-          <p className="text-muted">Create a message from the direction wizard to open a local draft in this browser.</p>
+          <p className="text-muted">Create a message from the direction wizard to open a message in your account.</p>
           <Link href="/new-message" className="mt-5 inline-flex min-h-11 items-center rounded-full bg-teal px-5 py-2 text-sm font-bold text-cream-strong">
             Back to Directions
           </Link>
@@ -184,13 +241,13 @@ export default function MessageWorkspacePage() {
     : [draft.closing.recap, draft.closing.callToResponse, draft.closing.closingApplication].filter(Boolean);
 
   return (
-    <AppShell title="Message Map" eyebrow="Local draft">
+    <AppShell title="Message Map" eyebrow="Message workspace">
       <PrintPulpitNotes draft={draft} active={printMode === "pulpit"} />
       <PrintFullPreparationNotes draft={draft} active={printMode === "full"} />
 
       <main className="mx-auto grid max-w-5xl gap-6 print:hidden">
         <section className="rounded-3xl border border-gold/40 bg-gold/10 p-4 text-sm font-semibold leading-6 text-teal">
-          This local draft is saved in this browser. You bring the calling, conviction, and voice; My Pulpit Pro helps shape the message.
+          Your changes are saved securely to your My Pulpit Pro account. You bring the calling, conviction, and voice; My Pulpit Pro helps shape the message.
         </section>
 
         <section className="rounded-[2rem] border border-line bg-cream-strong p-5 shadow-sm sm:p-7">
@@ -283,14 +340,34 @@ export default function MessageWorkspacePage() {
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">Save</p>
               <h2 className="font-serif text-3xl font-semibold text-teal">Save message</h2>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">Autosave keeps this local draft protected. Use Save Message when you want to mark the project as Saved.</p>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">Autosave keeps this message protected in your account. Use Save Message when you want to mark the project as Saved.</p>
+              <p className="mt-2 text-sm font-bold text-teal">{autosaveStatus === "dirty" ? "Unsaved changes" : autosaveStatus === "saving" ? "Saving..." : autosaveStatus === "failed" ? "Save failed. Try again." : "All changes saved"}</p>
               {saveMessage ? <p className="mt-2 text-sm font-bold text-teal">{saveMessage}</p> : null}
             </div>
-            <ActionButton filled onClick={() => {
-              if (!draft || !projectId) return;
-              const savedProject = markProjectSaved(projectId, draft);
-              setProjectStatus(savedProject?.status ?? "Saved");
-              setSaveMessage("Message saved");
+            <ActionButton filled onClick={async () => {
+              const latest = draftRef.current;
+              if (!latest || !projectId) return;
+              setSaveMessage("");
+              setAutosaveStatus("saving");
+              pendingDraftRef.current = latest;
+              try {
+                while (inFlightRef.current) {
+                  await new Promise((resolve) => window.setTimeout(resolve, 50));
+                }
+                inFlightRef.current = true;
+                const project = await sendDraft(latest, "save");
+                if (project) {
+                  pendingDraftRef.current = null;
+                  setProjectStatus(project.status);
+                  setAutosaveStatus("saved");
+                  setSaveMessage("Message saved");
+                }
+              } catch {
+                setAutosaveStatus("failed");
+                setSaveMessage("Save failed. Try again.");
+              } finally {
+                inFlightRef.current = false;
+              }
             }}>Save Message</ActionButton>
           </div>
         </section>

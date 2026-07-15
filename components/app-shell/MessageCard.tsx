@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { formatEditedDate, type MessageProject } from "./message-project-library";
+import { formatEditedDate } from "./message-project-library";
+import type { MessageProject } from "@/lib/message-projects/types";
 
 type MessageCardProps = {
   project: MessageProject;
