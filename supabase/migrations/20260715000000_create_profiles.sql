@@ -72,6 +72,15 @@ after insert on auth.users
 for each row
 execute function public.handle_new_user_profile();
 
+-- Backfill profiles for Auth users who existed before this migration.
+insert into public.profiles (id, email, full_name)
+select
+  id,
+  email,
+  nullif(trim(coalesce(raw_user_meta_data ->> 'full_name', '')), '')
+from auth.users
+on conflict (id) do nothing;
+
 create or replace function public.prevent_unauthorized_profile_role_change()
 returns trigger
 language plpgsql
