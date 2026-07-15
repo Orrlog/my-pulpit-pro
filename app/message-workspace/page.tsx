@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AppShell } from "@/components/app-shell/AppShell";
 import {
@@ -17,6 +18,16 @@ import {
   type MessageDraftPoint,
   type ScriptureBankItem,
 } from "@/components/app-shell/message-draft-storage";
+import {
+  ensureProjectLibrary,
+  getActiveProjectId,
+  getProject,
+  markProjectSaved,
+  persistCompatibilityDraft,
+  setActiveProjectId,
+  updateProjectDraft,
+  type MessageProjectStatus,
+} from "@/components/app-shell/message-project-library";
 
 type PrintMode = "pulpit" | "full" | null;
 type DetailPanel = { kind: "message" } | { kind: "introduction" } | { kind: "point"; id: string } | { kind: "closing" } | null;
@@ -34,13 +45,32 @@ function updateScriptureItem(items: ScriptureBankItem[], id: string, patch: Part
 }
 
 export default function MessageWorkspacePage() {
+  const searchParams = useSearchParams();
   const [draft, setDraft] = useState<MessageDraft | null | undefined>(undefined);
+  const [projectId, setProjectId] = useState<string | null>(null);
+  const [projectStatus, setProjectStatus] = useState<MessageProjectStatus>("Draft");
+  const [saveMessage, setSaveMessage] = useState("");
   const [detailPanel, setDetailPanel] = useState<DetailPanel>(null);
   const [printMode, setPrintMode] = useState<PrintMode>(null);
   const draftRef = useRef<MessageDraft | null>(null);
+  const projectIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     queueMicrotask(() => {
+      const projects = ensureProjectLibrary();
+      const requestedProjectId = searchParams.get("project");
+      const fallbackProjectId = requestedProjectId ?? getActiveProjectId() ?? projects[0]?.id ?? null;
+      const project = fallbackProjectId ? getProject(fallbackProjectId) : null;
+
+      if (project) {
+        setDraft(project.draft);
+        setProjectId(project.id);
+        setProjectStatus(project.status);
+        setActiveProjectId(project.id);
+        persistCompatibilityDraft(project.draft);
+        return;
+      }
+
       const raw =
         window.localStorage.getItem(MESSAGE_DRAFT_STORAGE_KEY) ??
         window.localStorage.getItem(PREVIOUS_MESSAGE_DRAFT_STORAGE_KEY) ??
@@ -53,16 +83,20 @@ export default function MessageWorkspacePage() {
       try {
         const upgraded = normalizeMessageDraft(JSON.parse(raw));
         setDraft(upgraded);
-        if (upgraded) window.localStorage.setItem(MESSAGE_DRAFT_STORAGE_KEY, JSON.stringify(upgraded));
+        if (upgraded) persistCompatibilityDraft(upgraded);
       } catch {
         setDraft(null);
       }
     });
-  }, []);
+  }, [searchParams]);
 
   useEffect(() => {
     draftRef.current = draft ?? null;
   }, [draft]);
+
+  useEffect(() => {
+    projectIdRef.current = projectId;
+  }, [projectId]);
 
   useEffect(() => {
     const handleAfterPrint = () => setPrintMode(null);
@@ -71,9 +105,14 @@ export default function MessageWorkspacePage() {
   }, []);
 
   function persistDraft(next: MessageDraft) {
-    const persisted = { ...next, updatedAt: new Date().toISOString() };
+    const activeProjectId = projectIdRef.current;
+    const persisted = { ...next, id: activeProjectId ?? next.id, updatedAt: new Date().toISOString() };
     draftRef.current = persisted;
-    window.localStorage.setItem(MESSAGE_DRAFT_STORAGE_KEY, JSON.stringify(persisted));
+    persistCompatibilityDraft(persisted);
+    if (activeProjectId) {
+      updateProjectDraft(activeProjectId, persisted);
+      setActiveProjectId(activeProjectId);
+    }
     return persisted;
   }
 
@@ -158,7 +197,7 @@ export default function MessageWorkspacePage() {
 
         <section className="rounded-[2rem] border border-line bg-cream-strong p-5 shadow-sm sm:p-7">
           <div className="min-w-0">
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">Message Map</p>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">Message Map · {projectStatus}</p>
             <h1 className="mt-2 break-words font-serif text-4xl font-semibold leading-tight text-teal sm:text-5xl">{draft.title}</h1>
             <p className="mt-4 text-sm font-bold uppercase tracking-[0.12em] text-muted">Main passage</p>
             <p className="mt-1 break-words text-lg font-bold text-ink">{draft.mainScripture}</p>
@@ -240,6 +279,23 @@ export default function MessageWorkspacePage() {
           onNotesChange={(notes) => patchClosing({ notes })}
           onEdit={() => setDetailPanel({ kind: "closing" })}
         />
+
+        <section className="rounded-[1.75rem] border border-line bg-cream-strong p-5 shadow-sm sm:p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">Save</p>
+              <h2 className="font-serif text-3xl font-semibold text-teal">Save message</h2>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">Autosave keeps this local draft protected. Use Save Message when you want to mark the project as Saved.</p>
+              {saveMessage ? <p className="mt-2 text-sm font-bold text-teal">{saveMessage}</p> : null}
+            </div>
+            <ActionButton filled onClick={() => {
+              if (!draft || !projectId) return;
+              const savedProject = markProjectSaved(projectId, draft);
+              setProjectStatus(savedProject?.status ?? "Saved");
+              setSaveMessage("Message saved");
+            }}>Save Message</ActionButton>
+          </div>
+        </section>
 
         <section className="rounded-[1.75rem] border border-line bg-cream-strong p-5 shadow-sm sm:p-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

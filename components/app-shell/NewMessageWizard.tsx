@@ -13,7 +13,6 @@ import {
   type StartPathId,
 } from "./data";
 import {
-  MESSAGE_DRAFT_STORAGE_KEY,
   buildClosing,
   buildContextNotes,
   buildInitialPoints,
@@ -24,6 +23,7 @@ import {
   getVerseText,
   type MessageDraft,
 } from "./message-draft-storage";
+import { createDraftProject, getUsageSummary } from "./message-project-library";
 import {
   getDevelopDirections,
   getExploreDirections,
@@ -68,6 +68,7 @@ export function NewMessageWizard({
   const [concernOffset, setConcernOffset] = useState(0);
   const [selectedConcernIndex, setSelectedConcernIndex] = useState<number | null>(null);
   const [showOwnConcern, setShowOwnConcern] = useState(false);
+  const [creationError, setCreationError] = useState("");
   const [ownConcern, setOwnConcern] = useState("");
   const [selectedDirection, setSelectedDirection] = useState<number | null>(null);
   const router = useRouter();
@@ -123,6 +124,12 @@ export function NewMessageWizard({
 
   function createMessageDraft() {
     if (selectedDirection === null) return;
+    setCreationError("");
+    const usage = getUsageSummary();
+    if (usage.used >= usage.total) {
+      setCreationError(`All ${usage.total} message projects have been used for ${usage.month}. Exploring message ideas is still free.`);
+      return;
+    }
 
     const direction = directionCards[selectedDirection];
     const pastoralFocus = direction.focus.replace(/^Preview sample:\s*/i, "");
@@ -195,8 +202,13 @@ export function NewMessageWizard({
       }),
     };
 
-    window.localStorage.setItem(MESSAGE_DRAFT_STORAGE_KEY, JSON.stringify(cleanMessageDraft(draft)));
-    router.push("/message-workspace");
+    const result = createDraftProject(cleanMessageDraft(draft));
+    if (!result.project) {
+      setCreationError(result.error ?? "This message project could not be created.");
+      return;
+    }
+
+    router.push(`/message-workspace?project=${result.project.id}`);
   }
 
   return (
@@ -695,10 +707,15 @@ export function NewMessageWizard({
                 <h3 className="text-xl font-bold text-teal">Review selected direction</h3>
                 <p className="mt-2 text-sm leading-6 text-muted">
                   {directionCards[selectedDirection].title} is selected. Creating the full outline
-                  will count as 1 of your 8 monthly message projects once backend tracking is
-                  connected. You may edit, rewrite, rearrange, and rebuild content in this local
+                  will count as 1 of your 10 monthly message projects. You may edit, rewrite,
+                  rearrange, and rebuild content in this local
                   preview without using another project.
                 </p>
+              </div>
+            ) : null}
+            {creationError ? (
+              <div className="mt-4 rounded-2xl border border-gold/40 bg-gold/10 p-4 text-sm font-bold text-teal">
+                {creationError}
               </div>
             ) : null}
           </div>

@@ -1,9 +1,8 @@
 import Link from "next/link";
 import { AppShell } from "@/components/app-shell/AppShell";
 import { DashboardStartPaths } from "@/components/app-shell/DashboardStartPaths";
-import { MessageCard } from "@/components/app-shell/MessageCard";
+import { RecentMessages } from "@/components/app-shell/RecentMessages";
 import { UsageCard } from "@/components/app-shell/UsageCard";
-import { sampleProjects } from "@/components/app-shell/data";
 
 export const metadata = {
   title: "Dashboard | My Pulpit Pro",
@@ -37,11 +36,7 @@ export default function DashboardPage() {
               View All Messages
             </Link>
           </div>
-          <div className="mt-5 grid gap-5 lg:grid-cols-3">
-            {sampleProjects.map((project) => (
-              <MessageCard key={project.title} project={project} />
-            ))}
-          </div>
+<RecentMessages />
         </section>
       </div>
     </AppShell>

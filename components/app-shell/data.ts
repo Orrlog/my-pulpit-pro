@@ -55,30 +55,6 @@ export const startPaths: StartPath[] = [
   },
 ];
 
-export const sampleProjects = [
-  {
-    title: "When the Wind Keeps You Waiting",
-    passage: "Ecclesiastes 11:1-6",
-    length: "45 minutes",
-    edited: "Edited today",
-    status: "Ready to Print",
-  },
-  {
-    title: "Faith When the Answer Has Not Come",
-    passage: "Psalm 13",
-    length: "30 minutes",
-    edited: "Edited yesterday",
-    status: "Draft",
-  },
-  {
-    title: "The Courage to Take the Next Step",
-    passage: "Joshua 1:1-9",
-    length: "60 minutes",
-    edited: "Edited 3 days ago",
-    status: "Draft",
-  },
-];
-
 export const messageModes: MessageMode[] = [
   {
     id: "sunday",
