@@ -658,7 +658,13 @@ export function buildContextNotes(input: { mainScripture: string; directionTitle
       "The passage speaks to weary believers who may be tempted to stop doing good before fruit is visible.",
     ];
   }
-  return [`Keep ${input.mainScripture} as the anchor. Let supporting passages serve the main text instead of taking over the sermon.`];
+  if (passage.includes("isaiah 40")) {
+    return [
+      "Isaiah 40 speaks comfort to weary people by contrasting human weakness with the Lord’s inexhaustible strength.",
+      "The chapter ends by emphasizing renewed strength for those who wait upon the Lord, moving from faintness to rising, running, and walking without giving up.",
+    ];
+  }
+  return [];
 }
 
 export function buildPastoralCareNote(input: { directionTitle: string; bigIdea: string; pastoralFocus: string; angle: string }) {
@@ -733,8 +739,19 @@ export function buildClosing(input: {
   };
 }
 
+function removeGeneratedExplanationBoilerplate(value: string) {
+  return value.replace(/\s*Connect it back to [^.]+ by showing how this supporting truth serves the sermon’s central burden: [^.]+\.?\s*$/i, "");
+}
+
+function cleanContextNote(value: string) {
+  const cleaned = cleanSentence(value);
+  if (/^Keep .+ as the anchor\. Let supporting passages serve the main text instead of taking over the sermon\.?$/i.test(cleaned)) return "";
+  if (/Let supporting passages serve the main text/i.test(cleaned)) return "";
+  return cleaned;
+}
+
 function qualityText(value: string, maxTitleWords?: number) {
-  let next = cleanSentence(value)
+  let next = cleanSentence(removeGeneratedExplanationBoilerplate(value))
     .replace(/Ask each listener to/gi, "Choose one way to")
     .replace(/Invite listeners to/gi, "A faithful response is to")
     .replace(/Use a ministry-facing example:?/gi, "For example:")
@@ -820,11 +837,11 @@ function pointFromProfile(input: { directionTitle: string; mainScripture: string
   return {
     id: `movement-${Date.now()}-${index + 1}-${Math.random().toString(36).slice(2, 7)}`,
     title: qualityText(title, 9),
-    summary: qualityText(`${profile.summary} This remains tied to ${input.mainScripture} and ${cleanSentence(input.directionTitle).toLowerCase()}.`),
+    summary: qualityText(`${profile.summary} This remains tied to ${input.mainScripture} and ${cleanSentence(input.directionTitle)}.`),
     scripture: scripture.reference,
     scriptureText: scripture.text,
     bullets: Array.from(new Set(profile.bullets.map((bullet) => qualityText(bullet)))).slice(0, 3),
-    explanation: qualityText(`${profile.explanation} Connect it back to ${input.mainScripture} by showing how this supporting truth serves the sermon’s central burden: ${cleanSentence(input.bigIdea).toLowerCase()}`),
+    explanation: qualityText(profile.explanation),
     application: qualityText(profile.application),
     illustrationOptions: profile.illustrationOptions.map((option) => qualityText(option)),
     transition: qualityText(profile.transition),
@@ -909,7 +926,7 @@ export function cleanMessageDraft(draft: MessageDraft): MessageDraft {
   return {
     ...draft,
     title: qualityText(stripPreviewDirectionLabel(draft.title), 8),
-    contextNotes: Array.from(new Set(draft.contextNotes.map((note) => qualityText(note)).filter(Boolean))),
+    contextNotes: Array.from(new Set(draft.contextNotes.map((note) => cleanContextNote(note)).filter(Boolean))),
     introduction: {
       hook: qualityText(draft.introduction.hook),
       pastoralTension: qualityText(draft.introduction.pastoralTension),
@@ -919,7 +936,7 @@ export function cleanMessageDraft(draft: MessageDraft): MessageDraft {
       firstMovementTransition: qualityText(draft.introduction.firstMovementTransition),
       bullets: Array.from(new Set((draft.introduction.bullets ?? []).map((bullet) => qualityText(bullet)).filter(Boolean))).slice(0, 4),
       scripture: draft.introduction.scripture ? qualityText(draft.introduction.scripture) : undefined,
-      scriptureText: draft.introduction.scriptureText ? qualityText(draft.introduction.scriptureText) : undefined,
+      scriptureText: draft.introduction.scriptureText ?? undefined,
       notes: draft.introduction.notes ?? "",
     },
     points: draft.points.map((point) => {
@@ -937,7 +954,7 @@ export function cleanMessageDraft(draft: MessageDraft): MessageDraft {
         transition: qualityText(point.transition),
         optionalResponseMoment: point.optionalResponseMoment ? qualityText(point.optionalResponseMoment) : undefined,
         scripture: qualityText(point.scripture),
-        scriptureText: point.scriptureText ? qualityText(point.scriptureText) : getVerseText(point.scripture),
+        scriptureText: point.scriptureText ?? getVerseText(point.scripture),
         notes: point.notes ?? "",
       };
     }),
@@ -950,7 +967,7 @@ export function cleanMessageDraft(draft: MessageDraft): MessageDraft {
       prayer: qualityText(draft.closing.prayer),
       bullets: Array.from(new Set((draft.closing.bullets ?? []).map((bullet) => qualityText(bullet)).filter(Boolean))).slice(0, 4),
       scripture: draft.closing.scripture ? qualityText(draft.closing.scripture) : undefined,
-      scriptureText: draft.closing.scriptureText ? qualityText(draft.closing.scriptureText) : undefined,
+      scriptureText: draft.closing.scriptureText ?? undefined,
       notes: draft.closing.notes ?? "",
     },
   };

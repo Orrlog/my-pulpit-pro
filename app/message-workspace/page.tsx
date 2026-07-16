@@ -44,6 +44,7 @@ function moveItem<T>(items: T[], fromIndex: number, toIndex: number) {
 function scriptureLines(text?: string) {
   if (!text || text === MISSING_VERSE_TEXT) return [];
   return text
+    .replace(/\s+(?=\d+(?::|\s+)\s*[A-Z])/g, "\n")
     .split(/\n+/)
     .map((line) => line.trim())
     .filter(Boolean)
@@ -1053,12 +1054,12 @@ function PrintFullPreparationNotes({ draft, active }: { draft: MessageDraft; act
   return (
     <article className={`${active ? "print:block" : "print:hidden"} hidden print:p-0 print:text-[10.5pt] print:leading-snug print:text-black`}>
       <PrintHeader draft={draft} />
-      {draft.contextNotes.length ? <section className="mt-5 break-inside-avoid border-t border-black/25 pt-4"><h2 className="text-base font-bold">Passage Context</h2>{draft.contextNotes.filter(Boolean).map((note, index) => <p key={index} className="mt-1">{note}</p>)}</section> : null}
+      {draft.contextNotes.length ? <section className="mt-5 border-t border-black/25 pt-4"><div className="break-inside-avoid"><h2 className="text-base font-bold">Passage Context</h2>{draft.contextNotes.filter(Boolean).map((note, index) => <p key={index} className="mt-1">{note}</p>)}</div></section> : null}
       {draft.pastoralCareNote ? <PrintLine label="Pastoral care note" value={draft.pastoralCareNote.text} /> : null}
-      <section className="mt-5 break-inside-avoid border-t border-black/25 pt-4">
-        <h2 className="text-base font-bold">Scripture Bank</h2>
+      <section className="mt-5 border-t border-black/25 pt-4">
+        <div className="break-inside-avoid"><h2 className="text-base font-bold">Scripture Bank</h2>
         <p className="mt-2 text-xs font-bold uppercase tracking-[0.12em]">Main Passage</p>
-        <p>{draft.mainScripture}</p>
+        <p>{draft.mainScripture}</p></div>
         {supporting.length ? <p className="mt-3 text-xs font-bold uppercase tracking-[0.12em]">Supporting Scriptures</p> : null}
         {supporting.map((item) => (
           <div key={item.id} className="mt-2 break-inside-avoid">
@@ -1076,16 +1077,17 @@ function PrintFullPreparationNotes({ draft, active }: { draft: MessageDraft; act
         <PrintLine label="Transition" value={draft.introduction.firstMovementTransition} />
       </PrintSection>
       <section className="mt-7">
-        <h2 className="text-base font-bold">Message Points</h2>
         {draft.points.map((point, index) => (
-          <section key={point.id} className="mt-6 break-inside-avoid-page border-t border-black/25 pt-4">
-            <h3 className="break-after-avoid text-base font-bold">{index + 1}. {point.title}</h3>
-            <p className="mt-1 text-sm font-semibold">{point.scripture}</p>
-            <PrintScriptureText text={point.scriptureText} />
+          <section key={point.id} className="mt-6 border-t border-black/25 pt-4 [break-inside:auto]">
+            <div className="break-inside-avoid">
+              <h3 className="break-after-avoid text-base font-bold">{index + 1}. {point.title}</h3>
+              <p className="mt-1 text-sm font-semibold">{point.scripture}</p>
+              <PrintScriptureText text={point.scriptureText} />
+            </div>
             <ul className="mt-2 list-disc pl-5">{point.bullets.map((bullet, bulletIndex) => <li key={bulletIndex}>{bullet}</li>)}</ul>
             <PrintLine label="Explanation" value={point.explanation} />
             <PrintLine label="Application" value={point.application} />
-            {point.illustrationOptions.length ? <PrintLine label="Illustration options" value={point.illustrationOptions.join(" | ")} /> : null}
+            {point.illustrationOptions.length ? <PrintIllustrationList items={point.illustrationOptions} /> : null}
             <PrintLine label="Transition" value={point.transition} />
             <PrintNotesBlock notes={point.notes} />
           </section>
@@ -1117,10 +1119,23 @@ function PrintNotesBlock({ notes }: { notes?: string }) {
 }
 
 function PrintHeader({ draft, compact = false }: { draft: MessageDraft; compact?: boolean }) {
-  return <header className="break-after-avoid border-b border-black/30 pb-3"><p className="text-xs font-bold uppercase tracking-[0.16em]">My Pulpit Pro</p><h1 className="mt-2 text-2xl font-bold">{draft.title}</h1><p className="mt-1 font-semibold">Main passage: {draft.mainScripture}</p><p className="mt-1">Big idea: {draft.bigIdea}</p><p className="mt-1 text-sm">{compact ? draft.lengthLabel : `${draft.lengthLabel} · Preferred translation: ${draft.translation}`}</p></header>;
+  return <header className="break-after-avoid border-b border-black/30 pb-3"><p className="text-xs font-bold uppercase tracking-[0.16em]">My Pulpit Pro</p><h1 className="mt-2 text-2xl font-bold">{draft.title}</h1><p className="mt-1 font-semibold">Main passage: {draft.mainScripture}</p><p className="mt-1">Big idea: {draft.bigIdea}</p>{compact ? null : <p className="mt-1 text-sm">Preferred translation: {draft.translation}</p>}</header>;
+}
+
+function PrintIllustrationList({ items }: { items: string[] }) {
+  const cleanItems = items.filter(Boolean);
+  if (!cleanItems.length) return null;
+  return (
+    <div className="mt-2 break-inside-avoid">
+      <p><strong>Illustration options:</strong></p>
+      <ul className="mt-1 list-disc space-y-1 pl-5">
+        {cleanItems.map((item, index) => <li key={`${index}-${item}`}>{item}</li>)}
+      </ul>
+    </div>
+  );
 }
 
 function PrintLine({ label, value }: { label: string; value?: string }) {
   if (!value) return null;
-  return <p className="mt-1"><strong>{label}:</strong> {value}</p>;
+  return <p className="mt-1 whitespace-pre-line"><strong>{label}:</strong> {value}</p>;
 }
