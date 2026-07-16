@@ -460,6 +460,7 @@ export default function MessageWorkspacePage() {
           bullets={introductionBullets.slice(0, 4)}
           scripture={draft.introduction.scripture}
           scriptureText={draft.introduction.scriptureText}
+          explanation={draft.introduction.explanation}
           transition={draft.introduction.firstMovementTransition}
           notes={draft.introduction.notes}
           onNotesChange={(notes) => patchIntroduction({ notes })}
@@ -595,11 +596,12 @@ export default function MessageWorkspacePage() {
   );
 }
 
-function IntroductionCard({ bullets, scripture, scriptureText, transition, notes, onNotesChange, onEdit }: { bullets: string[]; scripture?: string; scriptureText?: string; transition: string; notes: string; onNotesChange: (value: string) => void; onEdit: () => void }) {
+function IntroductionCard({ bullets, scripture, scriptureText, explanation, transition, notes, onNotesChange, onEdit }: { bullets: string[]; scripture?: string; scriptureText?: string; explanation: string; transition: string; notes: string; onNotesChange: (value: string) => void; onEdit: () => void }) {
   return (
     <OutlineCard label="Introduction" title="Start here" onEdit={onEdit}>
       {scripture ? <ScriptureBlock reference={scripture} text={scriptureText} /> : null}
       <BulletList bullets={bullets} />
+      <SectionLine label="Explanation" value={explanation} />
       <SectionLine label="Transition" value={transition} />
       <NotesArea value={notes} onChange={onNotesChange} />
     </OutlineCard>
@@ -800,6 +802,7 @@ function IntroductionDetails({ draft, patchIntroduction }: { draft: MessageDraft
       <TextArea label="Pastoral tension" value={intro.pastoralTension} onChange={(pastoralTension) => patchIntroduction({ pastoralTension })} />
       <TextArea label="Passage connection" value={intro.passageConnection} onChange={(passageConnection) => patchIntroduction({ passageConnection })} />
       <TextArea label="Central big idea" value={intro.bigIdeaBridge} onChange={(bigIdeaBridge) => patchIntroduction({ bigIdeaBridge })} />
+      <TextArea label="Explanation" value={intro.explanation} onChange={(explanation) => patchIntroduction({ explanation })} />
       <TextArea label="Primary Scripture reference" value={intro.scripture ?? ""} onChange={(scripture) => patchIntroduction({ scripture, scriptureText: scripture ? getVerseText(scripture) : "" })} rows={1} />
       <TextArea label="Primary Scripture text" value={intro.scriptureText ?? ""} onChange={(scriptureText) => patchIntroduction({ scriptureText })} />
       <TextArea label="Transition into first point" value={intro.firstMovementTransition} onChange={(firstMovementTransition) => patchIntroduction({ firstMovementTransition })} />
@@ -985,6 +988,7 @@ function PrintPulpitNotes({ draft, active }: { draft: MessageDraft; active: bool
         {draft.introduction.scripture ? <p className="mt-2 text-xs font-semibold">{draft.introduction.scripture}</p> : null}
         <PrintScriptureText text={draft.introduction.scriptureText} />
         <ul className="mt-2 list-disc pl-5">{draft.introduction.bullets.slice(0, 3).map((b, i) => <li key={i}>{b}</li>)}</ul>
+        <PrintLine label="Explanation" value={draft.introduction.explanation} />
       </PrintSection>
       <section className="mt-7">
         {draft.points.map((point, index) => (
@@ -1032,6 +1036,7 @@ function PrintFullPreparationNotes({ draft, active }: { draft: MessageDraft; act
         {draft.introduction.scripture ? <p className="mt-2 text-xs font-semibold">{draft.introduction.scripture}</p> : null}
         <PrintScriptureText text={draft.introduction.scriptureText} />
         <ul className="mt-2 list-disc pl-5">{draft.introduction.bullets.map((b, i) => <li key={i}>{b}</li>)}</ul>
+        <PrintLine label="Explanation" value={draft.introduction.explanation} />
         <PrintLine label="Hook" value={draft.introduction.hook} />
         <PrintLine label="Transition" value={draft.introduction.firstMovementTransition} />
       </PrintSection>

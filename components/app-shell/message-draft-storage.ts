@@ -23,6 +23,7 @@ export type MessageDraftIntroduction = {
   pastoralTension: string;
   passageConnection: string;
   bigIdeaBridge: string;
+  explanation: string;
   firstMovementTransition: string;
   bullets: string[];
   scripture?: string;
@@ -320,6 +321,7 @@ function bookOf(reference: string) {
 }
 
 function topicFrom(input: { directionTitle: string; bigIdea: string; pastoralFocus: string; angle: string; mainScripture: string }) {
+  if (input.mainScripture.toLowerCase().includes("isaiah 40")) return "default";
   const haystack = `${input.directionTitle} ${input.bigIdea} ${input.pastoralFocus} ${input.angle} ${input.mainScripture}`.toLowerCase();
   return Object.keys(scripturePools).find((key) => key !== "default" && haystack.includes(key)) ?? "default";
 }
@@ -414,6 +416,96 @@ const scriptureProfiles: Record<string, ScriptureProfile> = {
     illustrationOptions: ["A farmer watering ground before anything breaks the surface.", "A parent repeating truth before change is visible.", "A volunteer serving when no one notices."],
     transition: "Endurance becomes worship when every action is offered to the Lord.",
   },
+  "Psalm 42:11": {
+    title: "Speak Hope to the Downcast Soul",
+    summary: "Hope sometimes begins by preaching truth to a discouraged heart.",
+    bullets: ["The psalmist names the soul's heaviness without pretending it away.", "Hope is directed toward God, not toward improved circumstances alone.", "Praise can be anticipated before the feeling has returned."],
+    explanation: "Psalm 42:11 teaches weary believers to address despair with Godward hope. The verse does not shame sorrow; it turns sorrow toward the Lord who remains worthy of trust.",
+    application: "Name the discouragement honestly, then answer it with one true promise about God instead of letting the discouragement have the only voice.",
+    illustrationOptions: ["A believer repeating a hymn line in a hospital waiting room.", "Someone writing a promise of God on a card beside a medication bottle.", "A tired parent praying aloud before the day feels any easier."],
+    transition: "Hope grows stronger when it rests on resurrection mercy.",
+  },
+  "1 Peter 1:3": {
+    title: "Hope Is Born from Mercy",
+    summary: "Living hope rises from God's mercy and Christ's resurrection.",
+    bullets: ["Peter grounds hope in God's abundant mercy.", "The resurrection gives hope a living foundation.", "This hope is received before every hardship is resolved."],
+    explanation: "1 Peter 1:3 gives weary people a hope deeper than mood or circumstance. The resurrection of Jesus means God's mercy has already opened a future that suffering cannot erase.",
+    application: "When the week feels drained of hope, begin prayer with God's mercy and Christ's resurrection before listing everything that is wrong.",
+    illustrationOptions: ["A dawn that arrives after a long night without asking permission from the darkness.", "A family clinging to resurrection hope at a graveside.", "A church singing Easter truth during an ordinary hard Sunday."],
+    transition: "Mercy-given hope is joined by daily compassion that does not run out.",
+  },
+  "Lamentations 3:22": {
+    title: "Mercies Remain When Strength Runs Low",
+    summary: "God's compassion does not fail when His people feel spent.",
+    bullets: ["The verse rises from a book filled with sorrow.", "God's mercies are not fragile.", "Compassion becomes a reason to keep looking toward the Lord."],
+    explanation: "Lamentations 3:22 places hope inside grief, not outside it. The weary can keep going because the Lord's compassion outlasts the season that has drained them.",
+    application: "Look for one concrete mercy God has provided today, and let gratitude interrupt the assumption that nothing good remains.",
+    illustrationOptions: ["A small light left on in a house during a storm.", "A meal delivered to a tired family at the right time.", "A journal page listing mercies during a difficult month."],
+    transition: "Those mercies become an anchor for the soul.",
+  },
+  "Hebrews 6:19": {
+    title: "Hope Anchors the Soul",
+    summary: "God gives hope sturdy enough to hold when emotions are moving.",
+    bullets: ["An anchor matters because waters move.", "Biblical hope is sure and steadfast.", "The soul can be held even before circumstances settle."],
+    explanation: "Hebrews 6:19 pictures hope as an anchor. The point is not that believers never feel tossed, but that God's promise holds them when they do.",
+    application: "Identify the thought that keeps drifting, then anchor it to a promise of God before making the next decision.",
+    illustrationOptions: ["A boat held steady by an anchor while waves keep moving.", "A worker tying off a safety line before climbing.", "A family returning to one promise during a long uncertainty."],
+    transition: "Anchored hope changes how we endure pressure.",
+  },
+  "Romans 5:3": {
+    title: "Pressure Can Produce Endurance",
+    summary: "God can use tribulation to form perseverance rather than despair.",
+    bullets: ["Paul does not call pressure easy.", "Tribulation can become the place where endurance grows.", "Endurance is formed over time, not demanded instantly."],
+    explanation: "Romans 5:3 helps the church see that suffering is not wasted in God's hands. The Lord can form endurance through pressure that would otherwise only drain the heart.",
+    application: "Ask what endurance God may be forming in this season, and choose one sustainable practice that helps you remain faithful under pressure.",
+    illustrationOptions: ["Physical therapy that strengthens slowly through repeated resistance.", "A runner training with measured strain instead of a reckless sprint.", "A caregiver learning pacing because the road is long."],
+    transition: "Endurance is strengthened by an eternal perspective.",
+  },
+  "2 Corinthians 4:17": {
+    title: "Affliction Is Not the Final Weight",
+    summary: "Present suffering is real, but glory has the greater weight.",
+    bullets: ["Paul does not deny affliction.", "He sets suffering beside eternal glory.", "The comparison gives weary people perspective without minimizing pain."],
+    explanation: "2 Corinthians 4:17 develops hope by lifting the congregation's eyes beyond the immediate burden. The present affliction is not meaningless, and it is not the final measure of the story.",
+    application: "Hold one painful circumstance before the Lord and ask Him to help you interpret it in light of eternal glory rather than only today's exhaustion.",
+    illustrationOptions: ["A traveler enduring a difficult road because home is real.", "A patient enduring treatment because healing is the goal.", "A family measuring a long season by more than one hard week."],
+    transition: "This eternal hope is joined by Christ's present peace.",
+  },
+  "John 14:27": {
+    title: "Christ Gives Peace the World Cannot",
+    summary: "Jesus gives peace that is not dependent on trouble disappearing.",
+    bullets: ["Christ gives His own peace.", "His peace differs from what the world offers.", "Troubled hearts are invited away from fear."],
+    explanation: "John 14:27 brings the sermon to the peace of Christ. The weary are not merely told to calm down; they are offered the peace Jesus Himself gives.",
+    application: "Before trying to solve every pressure, pause and receive Christ's peace through prayer, Scripture, and surrender of the fear that has been ruling the moment.",
+    illustrationOptions: ["A child calmed by a parent's presence before the problem is fixed.", "A hospital room becoming quieter when someone prays.", "A tense meeting approached with settled trust instead of panic."],
+    transition: "Christ's peace points toward the day when weariness itself will end.",
+  },
+  "Revelation 21:4": {
+    title: "God Will Wipe Away Every Tear",
+    summary: "The final hope of God's people is a world where sorrow and pain are gone.",
+    bullets: ["The promise is tender and personal.", "God Himself wipes away tears.", "Pain does not get the final word."],
+    explanation: "Revelation 21:4 gives weary people the horizon of Christian hope. The sermon can acknowledge tears while pointing to the Lord who will finally remove sorrow, death, and pain.",
+    application: "Let future hope give courage for present faithfulness, especially when today's burden cannot be fully repaired yet.",
+    illustrationOptions: ["A parent wiping a child's tears after a frightening moment.", "A church holding hope during a funeral meal.", "A family enduring treatment while longing for restoration."],
+    transition: "Until that day, the Lord strengthens His people for the battle at hand.",
+  },
+  "Ephesians 6:10": {
+    title: "Be Strong in the Lord",
+    summary: "Christian strength is received from the Lord and His mighty power.",
+    bullets: ["The command is not to be strong in ourselves.", "Strength is located in the Lord.", "His power equips believers for the struggle before them."],
+    explanation: "Ephesians 6:10 directs weary people away from self-generated strength. The church stands by receiving strength from the Lord and relying on His power.",
+    application: "Replace the private claim 'I just have to be stronger' with a specific prayer for the Lord's strength before facing the next responsibility.",
+    illustrationOptions: ["A worker plugging a tool into power before using it.", "A soldier relying on supplied armor rather than bare hands.", "A pastor praying before entering a difficult conversation."],
+    transition: "The Lord's strength is also personal reassurance in fear.",
+  },
+  "Isaiah 41:10": {
+    title: "God Upholds the Fearful",
+    summary: "The Lord strengthens and upholds His people with His righteous hand.",
+    bullets: ["The command not to fear is grounded in God's presence.", "God promises help, not distant observation.", "His upholding hand steadies people who feel weak."],
+    explanation: "Isaiah 41:10 gives weary believers the comfort of God's personal presence and help. The Lord does not merely send strength; He upholds His people.",
+    application: "Name the fear that has been shaping your reactions, and answer it with God's promise: He is with you, He will help you, and He will uphold you.",
+    illustrationOptions: ["A person being steadied by another hand on icy steps.", "A child learning to walk while a parent holds close.", "A church member facing bad news with someone praying beside them."],
+    transition: "The message can now call the church to walk forward in received strength.",
+  },
 };
 
 function profileFor(reference: string): ScriptureProfile {
@@ -426,6 +518,10 @@ function profileFor(reference: string): ScriptureProfile {
     illustrationOptions: ["A person pausing long enough to listen before responding.", "A congregation carrying one clear truth into the week.", "A quiet act of obedience shaped by Scripture."],
     transition: "This truth prepares the next step in the message.",
   };
+}
+
+function hasSpecificProfile(reference: string) {
+  return Boolean(scriptureProfiles[reference]);
 }
 
 function parseSingleChapterRange(reference: string) {
@@ -491,7 +587,7 @@ function chooseReferences(input: {
   angle: string;
 }) {
   const needed = getPointCount(input.length);
-  const pool = [...scripturePools[topicFrom(input)], ...scripturePools.default];
+  const pool = [...scripturePools[topicFrom(input)], ...scripturePools.default].filter(hasSpecificProfile);
   const mainBook = bookOf(input.mainScripture);
   const seenBooks = new Set<string>();
   const chosen: string[] = [];
@@ -553,6 +649,13 @@ export function buildPastoralCareNote(input: { directionTitle: string; bigIdea: 
   };
 }
 
+function introductionExplanationFor(input: { directionTitle: string; mainScripture: string; bigIdea: string; angle: string; pastoralFocus: string }) {
+  if (input.mainScripture.toLowerCase().includes("isaiah 40")) {
+    return "Isaiah 40 speaks to people who know the limits of human strength. Even the young and capable become weary, but the Lord gives power to those who have none left. Waiting on Him is not passive resignation; it is dependent trust that receives renewal for rising, running, and continuing to walk without giving up.";
+  }
+  return `${cleanSentence(input.mainScripture)} anchors the sermon in God's Word by naming the congregation's need, revealing the Lord's character, and preparing the church to receive the supporting truths that follow. ${cleanSentence(input.bigIdea)}`;
+}
+
 export function buildIntroduction(input: {
   directionTitle: string;
   mainScripture: string;
@@ -571,6 +674,7 @@ export function buildIntroduction(input: {
     pastoralTension: `${angle} Name the burden honestly before calling the church toward trust and obedience.`,
     passageConnection: `${input.mainScripture} should be read in the introduction so the message begins under the authority and comfort of the main text.`,
     bigIdeaBridge: cleanSentence(input.bigIdea),
+    explanation: introductionExplanationFor(input),
     firstMovementTransition: "With the main passage before us, move from the burden people carry into the first biblical truth God gives.",
     bullets: [
       tension,
@@ -710,6 +814,7 @@ export function cleanMessageDraft(draft: MessageDraft): MessageDraft {
       pastoralTension: qualityText(draft.introduction.pastoralTension),
       passageConnection: qualityText(draft.introduction.passageConnection),
       bigIdeaBridge: qualityText(draft.introduction.bigIdeaBridge),
+      explanation: qualityText(draft.introduction.explanation ?? introductionExplanationFor(draft)),
       firstMovementTransition: qualityText(draft.introduction.firstMovementTransition),
       bullets: Array.from(new Set((draft.introduction.bullets ?? []).map((bullet) => qualityText(bullet)).filter(Boolean))).slice(0, 4),
       scripture: draft.introduction.scripture ? qualityText(draft.introduction.scripture) : undefined,
