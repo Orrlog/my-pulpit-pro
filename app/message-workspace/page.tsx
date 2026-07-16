@@ -70,6 +70,7 @@ export default function MessageWorkspacePage() {
   const [draggedPointId, setDraggedPointId] = useState<string | null>(null);
   const [dragScrollDirection, setDragScrollDirection] = useState<-1 | 0 | 1>(0);
   const [printMode, setPrintMode] = useState<PrintMode>(null);
+  const [showFallbackNotice, setShowFallbackNotice] = useState(false);
   const draftRef = useRef<MessageDraft | null>(null);
   const projectIdRef = useRef<string | null>(null);
   const saveTimerRef = useRef<number | null>(null);
@@ -85,7 +86,9 @@ export default function MessageWorkspacePage() {
   useEffect(() => {
     let cancelled = false;
     async function loadProject() {
-      const requestedProjectId = new URLSearchParams(window.location.search).get("project");
+      const params = new URLSearchParams(window.location.search);
+      const requestedProjectId = params.get("project");
+      setShowFallbackNotice(params.get("generation") === "fallback");
       try {
         const response = await fetch(requestedProjectId ? `/api/message-projects/${requestedProjectId}` : "/api/message-projects?limit=1", { cache: "no-store" });
         const payload = (await response.json()) as { project?: MessageProject; projects?: MessageProject[]; error?: string };
@@ -446,6 +449,17 @@ export default function MessageWorkspacePage() {
         <section className="rounded-3xl border border-gold/40 bg-gold/10 p-4 text-sm font-semibold leading-6 text-teal">
           Your changes are saved securely to your My Pulpit Pro account. You bring the calling, conviction, and voice; My Pulpit Pro helps shape the message.
         </section>
+
+        {showFallbackNotice ? (
+          <section className="rounded-3xl border border-line bg-cream-strong p-4 text-sm leading-6 text-ink">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <p>This message was created with the reliable starter generator because AI generation was temporarily unavailable. You can still edit every part of it.</p>
+              <button type="button" onClick={() => setShowFallbackNotice(false)} className="rounded-full border border-line px-4 py-2 text-xs font-extrabold uppercase tracking-[0.14em] text-teal transition hover:border-gold focus:outline-none focus:ring-2 focus:ring-gold focus:ring-offset-2 focus:ring-offset-cream-strong">
+                Dismiss
+              </button>
+            </div>
+          </section>
+        ) : null}
 
         <section className="rounded-[2rem] border border-line bg-cream-strong p-5 shadow-sm sm:p-7">
           <div className="min-w-0">
