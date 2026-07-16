@@ -59,21 +59,66 @@ function detectTopic(input: string) {
   return Object.keys(topicDirections).find((topic) => lower.includes(topic));
 }
 
+function genericDevelopDirections(entered: string, passage: string, response: string): SampleDirection[] {
+  const refs = ["Isaiah 40:29-31", "Matthew 11:28", "Psalm 46:1", "2 Corinthians 4:16-18", "Galatians 6:9"];
+  const subject = entered.trim() || "the message burden you entered";
+  const desired = response.trim();
+  return [
+    {
+      title: titleFromSubject(subject, "God's Strength for Weary People"),
+      scripture: passage.trim() || refs[0],
+      bigIdea: `When ${subject.toLowerCase()} feels heavy, God meets weakness with strength that human effort cannot manufacture.`,
+      angle: `A pastoral direction that names weariness honestly and moves the church toward God's renewing power.`,
+      focus: desired || "Weariness, human limits, and renewed trust in the Lord.",
+    },
+    {
+      title: titleFromSubject(subject, "Waiting Without Giving Up"),
+      scripture: passage.trim() || refs[1],
+      bigIdea: `Waiting on the Lord is active trust when visible strength has run out.`,
+      angle: `This direction helps listeners move from self-reliance to patient dependence on God's timing and care.`,
+      focus: desired || "Endurance, prayerful waiting, and faithful next steps.",
+    },
+    {
+      title: titleFromSubject(subject, "When God Renews What Life Has Drained"),
+      scripture: passage.trim() || refs[2],
+      bigIdea: `The Lord can renew what prolonged pressure has drained from the heart.`,
+      angle: `A hope-filled direction for people who are not merely tired for a day but worn down by a long season.`,
+      focus: desired || "Renewal, hope during pressure, and courage to keep walking.",
+    },
+    {
+      title: titleFromSubject(subject, "Strength Beyond Your Own"),
+      scripture: passage.trim() || refs[3],
+      bigIdea: `God's people do not have to pretend they are strong; they can receive strength from Him.`,
+      angle: `This message contrasts human limitation with the sufficiency of God's sustaining grace.`,
+      focus: desired || "Honest weakness, grace, and dependence on the Lord.",
+    },
+    {
+      title: titleFromSubject(subject, "Rising with Enduring Hope"),
+      scripture: passage.trim() || refs[4],
+      bigIdea: `Hope rises when the church learns to carry present burdens in the strength God supplies.`,
+      angle: `A concluding direction that moves from fatigue toward resilient obedience and worship.`,
+      focus: desired || "Hope, resilience, and obedient perseverance.",
+    },
+  ];
+}
+
+function titleFromSubject(subject: string, fallback: string) {
+  const normalized = subject.replace(/[.!?]+$/g, "").trim();
+  if (!normalized) return fallback;
+  const lower = normalized.toLowerCase();
+  if (lower.includes("strength") || lower.includes("heavy") || lower.includes("weary") || lower.includes("tired")) return fallback;
+  return fallback.replace(/Weary People|Life Has Drained|Your Own|Enduring Hope|Giving Up/g, normalized);
+}
+
 export function getDevelopDirections(idea: string, passage: string, response: string): SampleDirection[] {
   const entered = idea.trim() || "your entered subject";
   const topic = detectTopic(idea) ?? detectTopic(response);
-  const base = topic ? topicDirections[topic] : [1, 2, 3, 4, 5].map((number) => ({
-    title: `${entered}`,
-    scripture: passage.trim() || ["Proverbs 3:5-6", "Psalm 119:105", "James 1:5", "Colossians 3:17", "Romans 12:1-2"][number - 1],
-    bigIdea: `A Scripture-centered message can help the church respond faithfully to ${entered}.`,
-    angle: `This direction incorporates "${entered}" instead of using the generic idea pool.`,
-    focus: response.trim() ? `Practical response: ${response.trim()}` : `Pastoral application for ${entered}.`,
-  }));
+  const base = topic ? topicDirections[topic] : genericDevelopDirections(entered, passage, response);
 
   return base.map((direction) => withPreviewLabel({
     ...direction,
     scripture: passage.trim() || direction.scripture,
-    focus: response.trim() ? `${direction.focus} Desired response: ${response.trim()}` : direction.focus,
+    focus: response.trim() && topic ? `${direction.focus} Desired response: ${response.trim()}` : direction.focus,
   }));
 }
 

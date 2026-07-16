@@ -110,6 +110,8 @@ const kjvLookup: Record<string, string> = {
   "Proverbs 3:5": "Trust in the LORD with all thine heart; and lean not unto thine own understanding.",
   "Proverbs 19:11": "The discretion of a man deferreth his anger; and it is his glory to pass over a transgression.",
   "Isaiah 26:3": "Thou wilt keep him in perfect peace, whose mind is stayed on thee: because he trusteth in thee.",
+  "Isaiah 40:29": "He giveth power to the faint; and to them that have no might he increaseth strength.",
+  "Isaiah 40:30": "Even the youths shall faint and be weary, and the young men shall utterly fall:",
   "Isaiah 40:31": "But they that wait upon the LORD shall renew their strength; they shall mount up with wings as eagles; they shall run, and not be weary; and they shall walk, and not faint.",
   "Joshua 1:9": "Have not I commanded thee? Be strong and of a good courage; be not afraid, neither be thou dismayed: for the LORD thy God is with thee whithersoever thou goest.",
   "Isaiah 41:10": "Fear thou not; for I am with thee: be not dismayed; for I am thy God: I will strengthen thee; yea, I will help thee; yea, I will uphold thee with the right hand of my righteousness.",
@@ -192,7 +194,7 @@ const scripturePools: Record<string, string[]> = {
   courage: ["Joshua 1:9", "Psalm 27:1", "Isaiah 41:10", "2 Timothy 1:7", "Acts 4:29", "Hebrews 12:1", "1 Corinthians 16:13", "Ephesians 6:10", "Romans 15:13", "James 1:5"],
   faithfulness: ["Galatians 6:9", "1 Corinthians 15:58", "Colossians 3:23", "Psalm 126:5", "Matthew 25:21", "2 Thessalonians 3:13", "Hebrews 10:24", "James 1:22", "John 15:5", "Micah 6:8"],
   hope: ["Romans 15:13", "Psalm 42:11", "1 Peter 1:3", "Isaiah 40:31", "Lamentations 3:22", "Hebrews 6:19", "Romans 5:3", "2 Corinthians 4:17", "John 14:27", "Revelation 21:4"],
-  default: ["Psalm 46:1", "Proverbs 3:5", "Matthew 11:28", "John 15:5", "Romans 12:2", "Romans 15:13", "Galatians 6:9", "Philippians 4:6", "Colossians 3:17", "Hebrews 12:2", "James 1:22", "1 Peter 5:7"],
+  default: ["Isaiah 40:31", "Psalm 46:1", "Proverbs 3:5", "Matthew 11:28", "John 15:5", "Romans 12:2", "Romans 15:13", "Galatians 6:9", "Philippians 4:6", "Colossians 3:17", "Hebrews 12:2", "James 1:22", "1 Peter 5:7"],
 };
 
 type MovementSeed = {
@@ -302,8 +304,10 @@ function cleanSentence(value: string) {
     .replace(/\blocal preview\b/gi, "message direction")
     .replace(/\bpreview direction\b/gi, "message direction")
     .replace(/selected direction/gi, "message")
+    .replace(/Let [1-3]? ?[A-Za-z]+ ?[0-9:.-]+ shape the practical response\.?/gi, "")
+    .replace(/Let this Scripture shape one real decision before the day is over\.?/gi, "")
     .replace(/pastoral focus/gi, "main concern")
-    .replace(/A Scripture-centered message can help the church respond faithfully to\s*/gi, "The sermon calls the church to respond faithfully to ")
+    .replace(/A Scripture-centered message can help the church respond faithfully to\s*/gi, "God meets people in ")
     .replace(/\bgod\b/g, "God")
     .replace(/\s+/g, " ")
     .replace(/\.\.+/g, ".")
@@ -325,6 +329,103 @@ function movementSeedsFor(input: { mainScripture: string; directionTitle: string
   if (passage.includes("philippians 4")) return philippiansFourSeeds;
   if (passage.includes("galatians 6")) return galatiansSixSeeds;
   return defaultSeeds;
+}
+
+type ScriptureProfile = {
+  title: string;
+  summary: string;
+  bullets: string[];
+  explanation: string;
+  application: string;
+  illustrationOptions: string[];
+  transition: string;
+};
+
+const scriptureProfiles: Record<string, ScriptureProfile> = {
+  "Isaiah 40:31": {
+    title: "God Renews the Waiting Heart",
+    summary: "Waiting on the Lord is trust that receives strength instead of manufacturing it.",
+    bullets: ["The promise is given to people who have reached the end of themselves.", "Waiting on the Lord is active dependence, not passive resignation.", "Renewed strength shows up as endurance for the road still ahead."],
+    explanation: "Isaiah 40:31 gives weary people more than encouragement to try harder. It points them to the Lord who renews strength as His people wait on Him.",
+    application: "Name the place where waiting has become resentment, and bring that place honestly before the Lord instead of carrying it alone.",
+    illustrationOptions: ["A runner slowing down long enough to receive water before continuing.", "A caregiver admitting exhaustion and asking for help.", "A believer praying before taking the next faithful step."],
+    transition: "Renewed strength leads us to the refuge God gives in the middle of trouble.",
+  },
+  "Psalm 46:1": {
+    title: "God Is Present in Trouble",
+    summary: "The Lord is not distant from trouble; He is refuge and strength within it.",
+    bullets: ["The verse does not deny trouble.", "God gives both shelter and strength.", "His help is present, not theoretical."],
+    explanation: "Psalm 46:1 anchors the point in God's nearness. The church can face trouble without pretending it is small because God is present and strong.",
+    application: "Name the trouble plainly in prayer, then identify one way to take refuge in God before reacting out of fear.",
+    illustrationOptions: ["A storm shelter that matters because it is nearby.", "A family gathering in one safe room during severe weather.", "A church member finding steadiness in prayer before a hard appointment."],
+    transition: "Because God is refuge, the next truth calls us away from leaning only on ourselves.",
+  },
+  "Proverbs 3:5": {
+    title: "Trust Beyond Your Own Understanding",
+    summary: "Faith trusts the Lord when personal understanding cannot carry the whole weight.",
+    bullets: ["The verse commands whole-hearted trust.", "It names the limit of leaning on our own understanding.", "Trust is concrete when answers remain incomplete."],
+    explanation: "Proverbs 3:5 develops the point by confronting self-reliance. The heart wants enough information to feel safe, but wisdom begins by trusting the Lord.",
+    application: "Identify one place where you are demanding control before obedience, and choose one act of trust that does not require every answer first.",
+    illustrationOptions: ["Following a guide through unfamiliar terrain.", "A child holding a parent's hand in a crowded place.", "A driver trusting a bridge before seeing the far side."],
+    transition: "Trust opens the way to bring weariness and burdens to Christ.",
+  },
+  "Matthew 11:28": {
+    title: "Bring the Burden to Christ",
+    summary: "Jesus invites weary people to come to Him instead of carrying burdens alone.",
+    bullets: ["The invitation is addressed to laboring and heavy-laden people.", "Christ does not shame weariness.", "Rest begins by coming to Him."],
+    explanation: "Matthew 11:28 makes the point personal and Christ-centered. The Lord who knows our burdens invites us to come near and receive rest from Him.",
+    application: "Turn one burden into a specific prayer of coming to Christ rather than simply rehearsing it internally.",
+    illustrationOptions: ["Taking off a heavy pack after a long walk.", "Finally telling a trusted friend the truth about exhaustion.", "A child coming home after trying to be strong all day."],
+    transition: "The rest Christ gives also teaches us where true fruitfulness comes from.",
+  },
+  "John 15:5": {
+    title: "Fruit Comes from Abiding",
+    summary: "Lasting fruit grows from dependence on Christ, not spiritual self-sufficiency.",
+    bullets: ["Jesus names Himself as the vine.", "Branches bear fruit by abiding, not striving apart from Him.", "Without Him, effort cannot produce spiritual life."],
+    explanation: "John 15:5 turns the point toward dependence. The sermon can show that strength is received through abiding relationship with Christ.",
+    application: "Choose one daily rhythm of abiding—prayer, Scripture, confession, or worship—before measuring your worth by productivity.",
+    illustrationOptions: ["A branch drying out when cut from the vine.", "A phone that looks useful but has no power source.", "A ministry worker learning to pray before planning."],
+    transition: "Abiding in Christ also reshapes the mind and its patterns.",
+  },
+  "Romans 12:2": {
+    title: "Let God Renew the Mind",
+    summary: "God renews the mind so believers can discern and practice His will.",
+    bullets: ["The world presses people into anxious patterns.", "Renewal happens as God reshapes the mind.", "Discernment leads to faithful practice."],
+    explanation: "Romans 12:2 develops renewal at the level of thought and desire. God does not merely change circumstances; He forms a people who can think and live differently.",
+    application: "Replace one repeated fear or resentment with a specific truth from Scripture and one obedient practice.",
+    illustrationOptions: ["Changing a worn path by walking a better one repeatedly.", "Replacing a harmful soundtrack with a truer song.", "Learning a new reflex through repeated practice."],
+    transition: "As the mind is renewed, hope becomes more than optimism.",
+  },
+  "Romans 15:13": {
+    title: "Hope Overflows by God's Power",
+    summary: "The God of hope fills His people with joy and peace through believing.",
+    bullets: ["Hope begins with God's character.", "Joy and peace are gifts received through trust.", "The Holy Ghost gives power for hope to abound."],
+    explanation: "Romans 15:13 gives the point a hopeful horizon. The church does not have to manufacture hope; God fills and strengthens His people by His Spirit.",
+    application: "Ask God for hope where your heart has settled for survival, and look for one joy-giving sign of His faithfulness.",
+    illustrationOptions: ["A cup filled until it overflows.", "A lamp brightening a dark room from a steady power source.", "A weary person encouraged by a promise they can pray back to God."],
+    transition: "Hope strengthens the church to continue doing good.",
+  },
+  "Galatians 6:9": {
+    title: "Do Not Grow Weary in Good",
+    summary: "God gives endurance when doing good feels slow and costly.",
+    bullets: ["Paul assumes faithful people can grow weary.", "The harvest has a season.", "The command is hopeful, not harsh."],
+    explanation: "Galatians 6:9 speaks directly to tired obedience. It encourages perseverance because God sees the seed before anyone sees the harvest.",
+    application: "Choose one good work you are tempted to abandon and take the next faithful step without demanding instant results.",
+    illustrationOptions: ["A farmer watering ground before anything breaks the surface.", "A parent repeating truth before change is visible.", "A volunteer serving when no one notices."],
+    transition: "Endurance becomes worship when every action is offered to the Lord.",
+  },
+};
+
+function profileFor(reference: string): ScriptureProfile {
+  return scriptureProfiles[reference] ?? {
+    title: "Trust the Truth God Gives",
+    summary: `${reference} gives this movement a distinct biblical truth for the congregation to carry.`,
+    bullets: [`Let ${reference} speak before application is rushed.`, "Name the truth this verse reveals about God and His people.", "Move from that truth toward one faithful response."],
+    explanation: `${reference} should shape this point directly. Explain what the verse teaches, then connect that truth back to the main passage and sermon direction.`,
+    application: "Choose one concrete response that follows from this Scripture rather than a general intention to do better.",
+    illustrationOptions: ["A person pausing long enough to listen before responding.", "A congregation carrying one clear truth into the week.", "A quiet act of obedience shaped by Scripture."],
+    transition: "This truth prepares the next step in the message.",
+  };
 }
 
 function parseSingleChapterRange(reference: string) {
@@ -369,32 +470,6 @@ export function resolveScriptureText(reference: string): ScriptureTextResult {
 
 export function getVerseText(reference: string) {
   return resolveScriptureText(reference).text;
-}
-
-function supportNoteFor(reference: string, input: { directionTitle: string; bigIdea: string }) {
-  const noteByRef: Record<string, string> = {
-    "Isaiah 26:3": "Shows the link between a stayed mind and God's keeping peace.",
-    "John 14:27": "Strengthens the message with Jesus' promise of peace that is different from the world's peace.",
-    "1 Peter 5:7": "Gives anxious people a plain invitation to cast care on the Lord.",
-    "Romans 12:2": "Connects the sermon to renewed thinking and practiced discernment.",
-    "Galatians 6:9": "Names weariness directly and promises that faithful sowing is not forgotten.",
-    "1 Corinthians 15:58": "Reminds the church that labor in the Lord is not vain.",
-    "Colossians 3:23": "Frames hidden work as service offered to the Lord.",
-    "Psalm 126:5": "Adds the image of sowing with tears and reaping with joy.",
-    "Matthew 25:21": "Highlights faithfulness in small things before visible reward.",
-  };
-  return noteByRef[reference] ?? `Supports ${input.directionTitle} by giving another biblical angle on ${cleanSentence(input.bigIdea).toLowerCase()}.`;
-}
-
-function fullContextFor(reference: string, mainScripture: string) {
-  const contexts: Record<string, string> = {
-    "Philippians 4:6": "See the full context: Philippians 4:4-9.",
-    "Philippians 4:7": "See the full context: Philippians 4:4-9.",
-    "Philippians 4:8": "See the full context: Philippians 4:4-9.",
-    "Galatians 6:9": "See the full context: Galatians 6:7-10.",
-    "Galatians 6:10": "See the full context: Galatians 6:7-10.",
-  };
-  return contexts[reference] ?? (mainScripture.includes(":") ? `Main passage context: ${mainScripture}.` : undefined);
 }
 
 function makeScriptureItem(reference: string, index: number, input?: { directionTitle: string; bigIdea: string; mainScripture: string }): ScriptureBankItem {
@@ -486,20 +561,24 @@ export function buildIntroduction(input: {
   pastoralFocus: string;
 }): MessageDraftIntroduction {
   const angle = cleanSentence(input.angle);
+  const title = cleanSentence(input.directionTitle);
   const introScripture = resolveScriptureText(input.mainScripture);
+  const tension = input.mainScripture.toLowerCase().includes("isaiah 40")
+    ? "Weariness can make faithful people feel as though strength has run out and hope has been delayed."
+    : `${title} names a real pressure people bring into worship, not an abstract religious idea.`;
   return {
-    hook: `${cleanSentence(input.directionTitle)} begins with the real pressure people are carrying and brings that pressure under the voice of Scripture.`,
-    pastoralTension: `${angle} Name the tension honestly, then let the passage answer it with grace, truth, and a clear way forward.`,
-    passageConnection: `${input.mainScripture} gives the sermon its path. Let the main text lead before any supporting passage speaks.`,
+    hook: tension,
+    pastoralTension: `${angle} Name the burden honestly before calling the church toward trust and obedience.`,
+    passageConnection: `${input.mainScripture} should be read in the introduction so the message begins under the authority and comfort of the main text.`,
     bigIdeaBridge: cleanSentence(input.bigIdea),
-    firstMovementTransition: "From that tension, move into the first truth the passage puts in front of us.",
+    firstMovementTransition: "With the main passage before us, move from the burden people carry into the first biblical truth God gives.",
     bullets: [
-      `${cleanSentence(input.directionTitle)} touches a place people already recognize from the week they just lived.`,
-      `${input.mainScripture} does not rush past the pressure. It gives the church a faithful way to see it.`,
+      tension,
+      `${input.mainScripture} speaks to that need by revealing God's character and calling for a faithful response.`,
       cleanSentence(input.bigIdea),
     ],
-    scripture: introScripture.available ? introScripture.reference : undefined,
-    scriptureText: introScripture.available ? introScripture.text : undefined,
+    scripture: introScripture.available ? introScripture.reference : input.mainScripture,
+    scriptureText: introScripture.text,
     notes: "",
   };
 }
@@ -510,15 +589,17 @@ export function buildClosing(input: {
   bigIdea: string;
   pastoralFocus: string;
 }): MessageDraftClosing {
+  const title = cleanSentence(input.directionTitle);
+  const bigIdea = cleanSentence(input.bigIdea);
   return {
-    recap: `Return to ${input.mainScripture} and gather the sermon around this truth: ${cleanSentence(input.bigIdea)}`,
-    callToResponse: "Name the faithful response this passage calls for and take it into one real place this week.",
-    closingApplication: "Let the final application be concrete: a conversation, a prayer, a decision, a habit, or a quiet act of obedience shaped by the passage.",
-    prayer: "Ask the Lord to let His Word take root, give courage to obey, and keep the church steady in His faithful care.",
+    recap: `${input.mainScripture} has carried the sermon from the real burden into the sustaining truth of God’s care.`,
+    callToResponse: `Call the listener to respond to ${title.toLowerCase()} with one honest act of trust, prayer, endurance, or obedience.`,
+    closingApplication: `${bigIdea} Bring that truth into the specific place where the week ahead feels heavy, uncertain, or costly.`,
+    prayer: "Ask the Lord to renew tired hearts, deepen trust in His Word, and make the next faithful step clear.",
     bullets: [
-      `${input.mainScripture} gives the final word, not fear, hurry, or pressure.`,
-      cleanSentence(input.bigIdea),
-      "A faithful response can begin in one ordinary place before the week is over.",
+      `${input.mainScripture} gives the final word to God’s strength rather than to the weight people carried in.`,
+      bigIdea,
+      "The response should be concrete enough to practice before the week is over.",
     ],
     scripture: undefined,
     scriptureText: undefined,
@@ -540,16 +621,6 @@ function qualityText(value: string, maxTitleWords?: number) {
   return next;
 }
 
-function illustrationOptions(seed: MovementSeed, topic: string) {
-  if (topic === "anxiety") {
-    return ["Lying awake while every possible outcome keeps replaying.", "Checking a phone, account, medical portal, or test result because bad news feels close.", "Carrying a worry into prayer and mentally picking it back up before saying amen."];
-  }
-  if (topic === "grief") {
-    return ["An empty chair at the table that makes loss feel fresh again.", "A person doing ordinary errands while grief comes in waves.", "A church member who needs presence more than quick explanations."];
-  }
-  return seed.illustrationOptions;
-}
-
 export function buildInitialPoints(input: {
   length: string;
   directionTitle: string;
@@ -562,29 +633,60 @@ export function buildInitialPoints(input: {
   const count = getPointCount(input.length);
   const bank = input.scriptureBank?.length ? input.scriptureBank : buildScriptureBank(input);
   const seeds = movementSeedsFor(input);
-  const topic = topicFrom(input);
+  const supportBank = bank.filter((item) => item.reference !== input.mainScripture);
 
-  return Array.from({ length: count }, (_, index) => {
-    const seed = seeds[index % seeds.length];
-    const supportBank = bank.filter((item) => item.reference !== input.mainScripture);
-    const scripture = supportBank[index % supportBank.length] ?? makeScriptureItem(input.mainScripture, index, input);
-    const scriptureLead = `${scripture.reference} gives this point its center.`;
-    return {
-      id: `movement-${Date.now()}-${index + 1}`,
-      title: qualityText(seed.title, 6),
-      summary: qualityText(`${seed.summary} (${scripture.reference})`),
-      scripture: scripture.reference,
-      scriptureText: scripture.text,
-      bullets: Array.from(new Set([scriptureLead, ...seed.bullets.map((bullet) => qualityText(bullet))])).slice(0, 3),
-      explanation: qualityText(`${scripture.reference} develops this movement by showing ${seed.explanation.charAt(0).toLowerCase()}${seed.explanation.slice(1)}`),
-      application: qualityText(`${seed.application} Let ${scripture.reference} shape the practical response.`),
-      illustrationOptions: illustrationOptions(seed, topic).map((option) => qualityText(option)),
-      transition: qualityText(seed.transition),
-      optionalResponseMoment: index === 2 ? "Optional response moment: pause and let people silently name the burden they need to bring to God." : undefined,
-      includeOptionalResponse: false,
-      notes: "",
-    };
-  });
+  return Array.from({ length: count }, (_, index) => buildPointForIndex(input, supportBank, seeds, index));
+}
+
+function buildPointForIndex(input: { directionTitle: string; mainScripture: string; bigIdea: string; pastoralFocus: string; angle: string }, supportBank: ScriptureBankItem[], seeds: MovementSeed[], index: number, usedTitles = new Set<string>(), usedScriptures = new Set<string>()): MessageDraftPoint {
+  const available = supportBank.find((item) => !usedScriptures.has(item.reference)) ?? supportBank[index % Math.max(supportBank.length, 1)] ?? makeScriptureItem(input.mainScripture, index, input);
+  const profile = profileFor(available.reference);
+  const seed = seeds[index % seeds.length];
+  const baseTitle = profile.title || seed.title;
+  const title = usedTitles.has(baseTitle) ? `${baseTitle} Again in Daily Life` : baseTitle;
+  return {
+    id: `movement-${Date.now()}-${index + 1}-${Math.random().toString(36).slice(2, 7)}`,
+    title: qualityText(title, 9),
+    summary: qualityText(`${profile.summary} This remains tied to ${input.mainScripture} and ${cleanSentence(input.directionTitle).toLowerCase()}.`),
+    scripture: available.reference,
+    scriptureText: available.text,
+    bullets: Array.from(new Set(profile.bullets.map((bullet) => qualityText(bullet)))).slice(0, 3),
+    explanation: qualityText(`${profile.explanation} Connect it back to ${input.mainScripture} by showing how this supporting truth serves the sermon’s central burden: ${cleanSentence(input.bigIdea).toLowerCase()}`),
+    application: qualityText(profile.application),
+    illustrationOptions: profile.illustrationOptions.map((option) => qualityText(option)),
+    transition: qualityText(profile.transition),
+    optionalResponseMoment: index === 2 ? "Optional response moment: pause and let people silently name the burden they need to bring to God." : undefined,
+    includeOptionalResponse: false,
+    notes: "",
+  };
+}
+
+export function buildAdditionalPoint(draft: MessageDraft): MessageDraftPoint {
+  const usedTitles = new Set(draft.points.map((point) => point.title));
+  const usedScriptures = new Set(draft.points.map((point) => point.scripture));
+  const supportBank = draft.scriptureBank.filter((item) => item.reference !== draft.mainScripture);
+  return buildPointForIndex(draft, supportBank, movementSeedsFor(draft), draft.points.length, usedTitles, usedScriptures);
+}
+
+export function rewriteMessagePoint(draft: MessageDraft, point: MessageDraftPoint): MessageDraftPoint {
+  const usedScriptures = new Set(draft.points.filter((item) => item.id !== point.id).map((item) => item.scripture));
+  const supportBank = draft.scriptureBank.filter((item) => item.reference !== draft.mainScripture);
+  const alternate = supportBank.find((item) => !usedScriptures.has(item.reference) && item.reference !== point.scripture) ?? supportBank.find((item) => item.reference === point.scripture) ?? makeScriptureItem(point.scripture, 0, draft);
+  const profile = profileFor(alternate.reference);
+  return {
+    ...point,
+    title: qualityText(profile.title, 9),
+    summary: qualityText(`${profile.summary} This rewritten movement keeps the sermon connected to ${draft.mainScripture}.`),
+    scripture: alternate.reference,
+    scriptureText: alternate.text,
+    bullets: profile.bullets.map((bullet) => qualityText(bullet)),
+    explanation: qualityText(profile.explanation),
+    application: qualityText(profile.application),
+    illustrationOptions: profile.illustrationOptions.map((option) => qualityText(option)),
+    transition: qualityText(profile.transition),
+    status: "rewritten",
+    notes: point.notes,
+  };
 }
 
 export function cleanMessageDraft(draft: MessageDraft): MessageDraft {

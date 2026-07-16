@@ -5,8 +5,9 @@ import { useEffect, useRef, useState, type DragEvent, type MouseEvent, type Reac
 import { AppShell } from "@/components/app-shell/AppShell";
 import {
   MISSING_VERSE_TEXT,
-  buildInitialPoints,
+  buildAdditionalPoint,
   getVerseText,
+  rewriteMessagePoint,
   type MessageDraft,
   type MessageDraftClosing,
   type MessageDraftIntroduction,
@@ -64,6 +65,7 @@ export default function MessageWorkspacePage() {
   const [detailPanel, setDetailPanel] = useState<DetailPanel>(null);
   const [pointPendingDelete, setPointPendingDelete] = useState<MessageDraftPoint | null>(null);
   const [draggedPointId, setDraggedPointId] = useState<string | null>(null);
+  const [dragScrollDirection, setDragScrollDirection] = useState<-1 | 0 | 1>(0);
   const [printMode, setPrintMode] = useState<PrintMode>(null);
   const draftRef = useRef<MessageDraft | null>(null);
   const projectIdRef = useRef<string | null>(null);
@@ -75,6 +77,7 @@ export default function MessageWorkspacePage() {
   const savedVersionRef = useRef(0);
   const deleteModalCancelRef = useRef<HTMLButtonElement>(null);
   const deleteTriggerRef = useRef<HTMLElement | null>(null);
+  const dragScrollFrameRef = useRef<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -209,6 +212,33 @@ export default function MessageWorkspacePage() {
     window.addEventListener("afterprint", handleAfterPrint);
     return () => window.removeEventListener("afterprint", handleAfterPrint);
   }, []);
+
+  useEffect(() => {
+    if (!dragScrollDirection) {
+      if (dragScrollFrameRef.current) window.cancelAnimationFrame(dragScrollFrameRef.current);
+      dragScrollFrameRef.current = null;
+      return;
+    }
+
+    function scrollStep() {
+      window.scrollBy({ top: dragScrollDirection * 18, behavior: "auto" });
+      dragScrollFrameRef.current = window.requestAnimationFrame(scrollStep);
+    }
+
+    dragScrollFrameRef.current = window.requestAnimationFrame(scrollStep);
+    return () => {
+      if (dragScrollFrameRef.current) window.cancelAnimationFrame(dragScrollFrameRef.current);
+      dragScrollFrameRef.current = null;
+    };
+  }, [dragScrollDirection]);
+
+  function handlePointDrag(event: DragEvent<HTMLElement>) {
+    event.preventDefault();
+    const edge = 96;
+    if (event.clientY < edge) setDragScrollDirection(-1);
+    else if (window.innerHeight - event.clientY < edge) setDragScrollDirection(1);
+    else setDragScrollDirection(0);
+  }
 
   async function sendDraft(nextDraft: MessageDraft, action?: "save", keepalive = false) {
     const activeProjectId = projectIdRef.current;
@@ -449,7 +479,7 @@ export default function MessageWorkspacePage() {
               total={draft.points.length}
               isDragging={draggedPointId === point.id}
               onDragStart={() => setDraggedPointId(point.id)}
-              onDragOver={(event) => event.preventDefault()}
+              onDragOver={handlePointDrag}
               onDrop={() => {
                 if (!draggedPointId || draggedPointId === point.id) return;
                 updateDraft((current) => ({
@@ -461,21 +491,20 @@ export default function MessageWorkspacePage() {
                   ),
                 }));
                 setDraggedPointId(null);
+                setDragScrollDirection(0);
               }}
-              onDragEnd={() => setDraggedPointId(null)}
+              onDragEnd={() => { setDraggedPointId(null); setDragScrollDirection(0); }}
               onMoveUp={() => updateDraft((current) => ({ ...current, points: moveItem(current.points, index, index - 1) }))}
               onMoveDown={() => updateDraft((current) => ({ ...current, points: moveItem(current.points, index, index + 1) }))}
+              onMoveTo={(position) => updateDraft((current) => ({ ...current, points: moveItem(current.points, index, position - 1) }))}
               onNotesChange={(notes) => patchPoint(point.id, { notes })}
               onEdit={() => setDetailPanel({ kind: "point", id: point.id })}
               onKeep={() => patchPoint(point.id, { status: "kept" })}
               onRewrite={() =>
-                patchPoint(point.id, {
-                  status: "rewritten",
-                  summary: `This point keeps ${point.scripture} connected to ${draft.mainScripture} in plain language.`,
-                  bullets: point.bullets.map((bullet, bulletIndex) => (bulletIndex === 0 ? `${point.scripture} gives this point a truth to carry into ordinary life.` : bullet)),
-                  explanation: `${point.scripture} anchors this movement and helps the church see how ${draft.bigIdea.toLowerCase()}`,
-                  application: `${point.application} Let this Scripture shape one real decision before the day is over.`,
-                })
+                updateDraft((current) => ({
+                  ...current,
+                  points: current.points.map((item) => (item.id === point.id ? rewriteMessagePoint(current, item) : item)),
+                }))
               }
               onRemove={(trigger) => {
                 deleteTriggerRef.current = trigger;
@@ -486,16 +515,7 @@ export default function MessageWorkspacePage() {
           <button
             type="button"
             onClick={() => {
-              const next = buildInitialPoints({
-                length: "30",
-                directionTitle: draft.directionTitle,
-                mainScripture: draft.mainScripture,
-                bigIdea: draft.bigIdea,
-                angle: draft.angle,
-                pastoralFocus: draft.pastoralFocus,
-                scriptureBank: draft.scriptureBank,
-              })[0];
-              updateDraft((current) => ({ ...current, points: [...current.points, { ...next, id: `movement-${Date.now()}` }] }));
+              updateDraft((current) => ({ ...current, points: [...current.points, buildAdditionalPoint(current)] }));
             }}
             className="min-h-12 rounded-full bg-gold px-5 py-3 text-sm font-bold text-teal-dark transition hover:bg-gold/90 focus:outline-none focus:ring-2 focus:ring-gold focus:ring-offset-2"
           >
@@ -586,7 +606,7 @@ function IntroductionCard({ bullets, scripture, scriptureText, transition, notes
   );
 }
 
-function PointCard({ point, number, total, isDragging, onNotesChange, onEdit, onKeep, onRewrite, onRemove, onMoveUp, onMoveDown, onDragStart, onDragOver, onDrop, onDragEnd }: { point: MessageDraftPoint; number: number; total: number; isDragging: boolean; onNotesChange: (value: string) => void; onEdit: () => void; onKeep: () => void; onRewrite: () => void; onRemove: (trigger: HTMLElement) => void; onMoveUp: () => void; onMoveDown: () => void; onDragStart: () => void; onDragOver: (event: DragEvent<HTMLElement>) => void; onDrop: () => void; onDragEnd: () => void }) {
+function PointCard({ point, number, total, isDragging, onNotesChange, onEdit, onKeep, onRewrite, onRemove, onMoveUp, onMoveDown, onMoveTo, onDragStart, onDragOver, onDrop, onDragEnd }: { point: MessageDraftPoint; number: number; total: number; isDragging: boolean; onNotesChange: (value: string) => void; onEdit: () => void; onKeep: () => void; onRewrite: () => void; onRemove: (trigger: HTMLElement) => void; onMoveUp: () => void; onMoveDown: () => void; onMoveTo: (position: number) => void; onDragStart: () => void; onDragOver: (event: DragEvent<HTMLElement>) => void; onDrop: () => void; onDragEnd: () => void }) {
   return (
     <article
       draggable
@@ -625,6 +645,16 @@ function PointCard({ point, number, total, isDragging, onNotesChange, onEdit, on
           <ActionButton filled onClick={onRewrite}>Rewrite</ActionButton>
           <ActionButton onClick={onMoveUp} disabled={number === 1}>Move Up</ActionButton>
           <ActionButton onClick={onMoveDown} disabled={number === total}>Move Down</ActionButton>
+          <label className="grid gap-1 text-xs font-bold uppercase tracking-[0.12em] text-muted">
+            Move to Point
+            <select
+              value={number}
+              onChange={(event) => onMoveTo(Number(event.target.value))}
+              className="min-h-10 rounded-full border border-line bg-background px-3 py-2 text-sm font-bold normal-case tracking-normal text-teal focus:outline-none focus:ring-2 focus:ring-gold"
+            >
+              {Array.from({ length: total }, (_, index) => index + 1).map((position) => <option key={position} value={position}>{position}</option>)}
+            </select>
+          </label>
           <ActionButton destructive onClick={(event) => onRemove(event.currentTarget)}>Trash</ActionButton>
         </div>
       </div>
@@ -950,16 +980,15 @@ function PrintSection({ title, children, notes }: { title: string; children: Rea
 function PrintPulpitNotes({ draft, active }: { draft: MessageDraft; active: boolean }) {
   return (
     <article className={`${active ? "print:block" : "print:hidden"} hidden print:p-0 print:text-[10.5pt] print:leading-snug print:text-black`}>
-      <PrintHeader draft={draft} />
+      <PrintHeader draft={draft} compact />
       <PrintSection title="Introduction" notes={draft.introduction.notes}>
         <ul className="list-disc pl-5">{draft.introduction.bullets.slice(0, 3).map((b, i) => <li key={i}>{b}</li>)}</ul>
         {draft.introduction.scripture ? <p className="mt-2 text-xs font-semibold">{draft.introduction.scripture}</p> : null}
         <PrintScriptureText text={draft.introduction.scriptureText} />
       </PrintSection>
       <section className="mt-7">
-        <h2 className="text-base font-bold">Pulpit Outline</h2>
         {draft.points.map((point, index) => (
-          <section key={point.id} className="mt-6 break-inside-auto border-t border-black/25 pt-4">
+          <section key={point.id} className="mt-6 break-inside-avoid-page border-t border-black/25 pt-4">
             <h3 className="break-after-avoid text-base font-bold">{index + 1}. {point.title}</h3>
             <p className="mt-1 text-xs font-semibold">{point.scripture}</p>
             <PrintScriptureText text={point.scriptureText} />
@@ -1009,7 +1038,7 @@ function PrintFullPreparationNotes({ draft, active }: { draft: MessageDraft; act
       <section className="mt-7">
         <h2 className="text-base font-bold">Message Points</h2>
         {draft.points.map((point, index) => (
-          <section key={point.id} className="mt-6 break-inside-auto border-t border-black/25 pt-4">
+          <section key={point.id} className="mt-6 break-inside-avoid-page border-t border-black/25 pt-4">
             <h3 className="break-after-avoid text-base font-bold">{index + 1}. {point.title}</h3>
             <p className="mt-1 text-sm font-semibold">{point.scripture}</p>
             <PrintScriptureText text={point.scriptureText} />
@@ -1035,7 +1064,7 @@ function PrintFullPreparationNotes({ draft, active }: { draft: MessageDraft; act
 
 function PrintNotesBlock({ notes }: { notes?: string }) {
   return (
-    <div className="mt-4 mb-5 break-inside-avoid">
+    <div className="mt-4 mb-5 break-inside-avoid-page">
       <p className="text-xs font-bold uppercase tracking-[0.12em]">My Notes</p>
       {notes ? <p className="mt-1 whitespace-pre-wrap">{notes}</p> : null}
       <div className="mt-2 grid gap-3" aria-hidden="true">
@@ -1047,8 +1076,8 @@ function PrintNotesBlock({ notes }: { notes?: string }) {
   );
 }
 
-function PrintHeader({ draft }: { draft: MessageDraft }) {
-  return <header className="break-after-avoid border-b border-black/30 pb-3"><p className="text-xs font-bold uppercase tracking-[0.16em]">My Pulpit Pro</p><h1 className="mt-2 text-2xl font-bold">{draft.title}</h1><p className="mt-1 font-semibold">Main passage: {draft.mainScripture}</p><p className="mt-1">Big idea: {draft.bigIdea}</p><p className="mt-1 text-sm">{draft.lengthLabel} · Preferred translation: {draft.translation}</p></header>;
+function PrintHeader({ draft, compact = false }: { draft: MessageDraft; compact?: boolean }) {
+  return <header className="break-after-avoid border-b border-black/30 pb-3"><p className="text-xs font-bold uppercase tracking-[0.16em]">My Pulpit Pro</p><h1 className="mt-2 text-2xl font-bold">{draft.title}</h1><p className="mt-1 font-semibold">Main passage: {draft.mainScripture}</p><p className="mt-1">Big idea: {draft.bigIdea}</p><p className="mt-1 text-sm">{compact ? draft.lengthLabel : `${draft.lengthLabel} · Preferred translation: ${draft.translation}`}</p></header>;
 }
 
 function PrintLine({ label, value }: { label: string; value?: string }) {
