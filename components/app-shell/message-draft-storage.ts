@@ -287,14 +287,27 @@ export function getPointCount(length: string) {
   return 8;
 }
 
-function cleanSentence(value: string) {
+export function stripPreviewDirectionLabel(value: string) {
   return value
+    .replace(/\s*:\s*Preview Direction\s*\d+\s*$/i, "")
+    .replace(/\s*[-–—]\s*Preview Direction\s*\d+\s*$/i, "")
+    .replace(/\bPreview Direction\s*\d+\b/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+function cleanSentence(value: string) {
+  return stripPreviewDirectionLabel(value)
     .replace(/^Preview sample:\s*/i, "")
+    .replace(/\blocal preview\b/gi, "message direction")
+    .replace(/\bpreview direction\b/gi, "message direction")
     .replace(/selected direction/gi, "message")
     .replace(/pastoral focus/gi, "main concern")
+    .replace(/A Scripture-centered message can help the church respond faithfully to\s*/gi, "The sermon calls the church to respond faithfully to ")
     .replace(/\bgod\b/g, "God")
     .replace(/\s+/g, " ")
     .replace(/\.\.+/g, ".")
+    .replace(/\s+([.,;:])/g, "$1")
     .trim();
 }
 
@@ -389,8 +402,8 @@ function makeScriptureItem(reference: string, index: number, input?: { direction
     id: `scripture-${Date.now()}-${index}`,
     reference,
     text: getVerseText(reference),
-    supportNote: input ? supportNoteFor(reference, input) : "Explain how this reference supports the main passage.",
-    fullContext: input ? fullContextFor(reference, input.mainScripture) : undefined,
+    supportNote: "",
+    fullContext: undefined,
   };
 }
 
@@ -434,7 +447,8 @@ export function buildScriptureBank(input: {
   pastoralFocus: string;
   angle: string;
 }): ScriptureBankItem[] {
-  return chooseReferences(input).map((reference, index) => makeScriptureItem(reference, index, input));
+  const references = Array.from(new Set([input.mainScripture, ...chooseReferences(input)]));
+  return references.map((reference, index) => makeScriptureItem(reference, index, input));
 }
 
 export function buildContextNotes(input: { mainScripture: string; directionTitle: string; bigIdea: string }) {
@@ -474,13 +488,13 @@ export function buildIntroduction(input: {
   const angle = cleanSentence(input.angle);
   const introScripture = resolveScriptureText(input.mainScripture);
   return {
-    hook: `${input.directionTitle} starts where people feel the pressure of ordinary life and need a steady word from Scripture.`,
-    pastoralTension: `${angle} The sermon should name that pressure honestly and then let the passage answer it with grace and truth.`,
+    hook: `${cleanSentence(input.directionTitle)} begins with the real pressure people are carrying and brings that pressure under the voice of Scripture.`,
+    pastoralTension: `${angle} Name the tension honestly, then let the passage answer it with grace, truth, and a clear way forward.`,
     passageConnection: `${input.mainScripture} gives the sermon its path. Let the main text lead before any supporting passage speaks.`,
     bigIdeaBridge: cleanSentence(input.bigIdea),
     firstMovementTransition: "From that tension, move into the first truth the passage puts in front of us.",
     bullets: [
-      `${input.directionTitle} touches a place people already recognize from the week they just lived.`,
+      `${cleanSentence(input.directionTitle)} touches a place people already recognize from the week they just lived.`,
       `${input.mainScripture} does not rush past the pressure. It gives the church a faithful way to see it.`,
       cleanSentence(input.bigIdea),
     ],
@@ -498,8 +512,8 @@ export function buildClosing(input: {
 }): MessageDraftClosing {
   return {
     recap: `Return to ${input.mainScripture} and gather the sermon around this truth: ${cleanSentence(input.bigIdea)}`,
-    callToResponse: "Take one honest next step that fits the Word you have heard today.",
-    closingApplication: "Carry this passage into one ordinary place this week: a conversation, a worry, a decision, a habit, or a quiet act of obedience.",
+    callToResponse: "Name the faithful response this passage calls for and take it into one real place this week.",
+    closingApplication: "Let the final application be concrete: a conversation, a prayer, a decision, a habit, or a quiet act of obedience shaped by the passage.",
     prayer: "Ask the Lord to let His Word take root, give courage to obey, and keep the church steady in His faithful care.",
     bullets: [
       `${input.mainScripture} gives the final word, not fear, hurry, or pressure.`,
@@ -552,16 +566,18 @@ export function buildInitialPoints(input: {
 
   return Array.from({ length: count }, (_, index) => {
     const seed = seeds[index % seeds.length];
-    const scripture = bank[index % bank.length] ?? makeScriptureItem(input.mainScripture, index, input);
+    const supportBank = bank.filter((item) => item.reference !== input.mainScripture);
+    const scripture = supportBank[index % supportBank.length] ?? makeScriptureItem(input.mainScripture, index, input);
+    const scriptureLead = `${scripture.reference} gives this point its center.`;
     return {
       id: `movement-${Date.now()}-${index + 1}`,
       title: qualityText(seed.title, 6),
-      summary: qualityText(seed.summary),
+      summary: qualityText(`${seed.summary} (${scripture.reference})`),
       scripture: scripture.reference,
       scriptureText: scripture.text,
-      bullets: Array.from(new Set(seed.bullets.map((bullet) => qualityText(bullet)))).slice(0, 3),
-      explanation: qualityText(seed.explanation),
-      application: qualityText(seed.application),
+      bullets: Array.from(new Set([scriptureLead, ...seed.bullets.map((bullet) => qualityText(bullet))])).slice(0, 3),
+      explanation: qualityText(`${scripture.reference} develops this movement by showing ${seed.explanation.charAt(0).toLowerCase()}${seed.explanation.slice(1)}`),
+      application: qualityText(`${seed.application} Let ${scripture.reference} shape the practical response.`),
       illustrationOptions: illustrationOptions(seed, topic).map((option) => qualityText(option)),
       transition: qualityText(seed.transition),
       optionalResponseMoment: index === 2 ? "Optional response moment: pause and let people silently name the burden they need to bring to God." : undefined,
@@ -575,7 +591,7 @@ export function cleanMessageDraft(draft: MessageDraft): MessageDraft {
   const seenApplications = new Set<string>();
   return {
     ...draft,
-    title: qualityText(draft.title, 8),
+    title: qualityText(stripPreviewDirectionLabel(draft.title), 8),
     contextNotes: Array.from(new Set(draft.contextNotes.map((note) => qualityText(note)).filter(Boolean))),
     introduction: {
       hook: qualityText(draft.introduction.hook),
@@ -594,7 +610,7 @@ export function cleanMessageDraft(draft: MessageDraft): MessageDraft {
       seenApplications.add(application);
       return {
         ...point,
-        title: qualityText(point.title, 6),
+        title: qualityText(stripPreviewDirectionLabel(point.title), 6),
         summary: qualityText(point.summary),
         bullets: Array.from(new Set(point.bullets.map((bullet) => qualityText(bullet)).filter(Boolean))),
         explanation: qualityText(point.explanation),
@@ -602,9 +618,12 @@ export function cleanMessageDraft(draft: MessageDraft): MessageDraft {
         illustrationOptions: Array.from(new Set(point.illustrationOptions.map((option) => qualityText(option)).filter(Boolean))),
         transition: qualityText(point.transition),
         optionalResponseMoment: point.optionalResponseMoment ? qualityText(point.optionalResponseMoment) : undefined,
+        scripture: qualityText(point.scripture),
+        scriptureText: point.scriptureText ? qualityText(point.scriptureText) : getVerseText(point.scripture),
         notes: qualityText(point.notes ?? ""),
       };
     }),
+    scriptureBank: Array.from(new Map(draft.scriptureBank.map((item) => [item.reference, { ...item, supportNote: "", fullContext: undefined }])).values()),
     closing: {
       recap: qualityText(draft.closing.recap),
       callToResponse: qualityText(draft.closing.callToResponse),
@@ -635,8 +654,8 @@ function normalizeScriptureBank(value: LegacyDraft["scriptureBank"], base: Param
       id: item.id ?? `scripture-${Date.now()}-${index}`,
       reference,
       text: item.text ?? getVerseText(reference),
-      supportNote: item.supportNote ?? supportNoteFor(reference, base),
-      fullContext: item.fullContext ?? fullContextFor(reference, base.mainScripture),
+      supportNote: "",
+      fullContext: undefined,
     };
   });
 }
@@ -713,7 +732,7 @@ export function normalizeMessageDraft(raw: unknown): MessageDraft | null {
     title: legacy.title ?? directionTitle,
     contextNotes: legacy.contextNotes?.length ? legacy.contextNotes : buildContextNotes(base),
     pastoralCareNote: legacy.pastoralCareNote ?? buildPastoralCareNote(base),
-    scriptureBank,
+    scriptureBank: Array.from(new Map(scriptureBank.map((item) => [item.reference, { ...item, supportNote: "", fullContext: undefined }])).values()),
     introduction,
     points,
     closing,

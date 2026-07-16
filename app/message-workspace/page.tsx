@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type DragEvent, type MouseEvent, type ReactNode, type RefObject } from "react";
 import { AppShell } from "@/components/app-shell/AppShell";
 import {
   MISSING_VERSE_TEXT,
@@ -30,6 +30,30 @@ function updateScriptureItem(items: ScriptureBankItem[], id: string, patch: Part
   return items.map((item) => (item.id === id ? { ...item, ...patch } : item));
 }
 
+function moveItem<T>(items: T[], fromIndex: number, toIndex: number) {
+  if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0 || fromIndex >= items.length || toIndex >= items.length) return items;
+  const next = [...items];
+  const [item] = next.splice(fromIndex, 1);
+  next.splice(toIndex, 0, item);
+  return next;
+}
+
+function scriptureLines(text?: string) {
+  if (!text || text === MISSING_VERSE_TEXT) return [];
+  return text
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const match = line.match(/^(\d+)(?::|\s+)\s*(.+)$/);
+      return match ? { verse: match[1], text: match[2].trim() } : { verse: "", text: line };
+    });
+}
+
+function uniqueScriptureItems(items: ScriptureBankItem[]) {
+  return Array.from(new Map(items.filter((item) => item.reference.trim()).map((item) => [item.reference.trim(), item])).values());
+}
+
 export default function MessageWorkspacePage() {
   const [draft, setDraft] = useState<MessageDraft | null | undefined>(undefined);
   const [projectId, setProjectId] = useState<string | null>(null);
@@ -38,6 +62,8 @@ export default function MessageWorkspacePage() {
   const [loadError, setLoadError] = useState("");
   const [autosaveStatus, setAutosaveStatus] = useState<"saved" | "dirty" | "saving" | "failed">("saved");
   const [detailPanel, setDetailPanel] = useState<DetailPanel>(null);
+  const [pointPendingDelete, setPointPendingDelete] = useState<MessageDraftPoint | null>(null);
+  const [draggedPointId, setDraggedPointId] = useState<string | null>(null);
   const [printMode, setPrintMode] = useState<PrintMode>(null);
   const draftRef = useRef<MessageDraft | null>(null);
   const projectIdRef = useRef<string | null>(null);
@@ -47,6 +73,8 @@ export default function MessageWorkspacePage() {
   const pendingVersionRef = useRef(0);
   const editVersionRef = useRef(0);
   const savedVersionRef = useRef(0);
+  const deleteModalCancelRef = useRef<HTMLButtonElement>(null);
+  const deleteTriggerRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -96,6 +124,37 @@ export default function MessageWorkspacePage() {
   useEffect(() => {
     projectIdRef.current = projectId;
   }, [projectId]);
+
+  useEffect(() => {
+    if (!pointPendingDelete) return;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : deleteTriggerRef.current;
+    deleteModalCancelRef.current?.focus();
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setPointPendingDelete(null);
+        previousFocus?.focus();
+      }
+      if (event.key !== "Tab") return;
+      const modal = document.getElementById("delete-point-modal");
+      const focusable = Array.from(modal?.querySelectorAll<HTMLElement>("button, [href], input, textarea, select, [tabindex]:not([tabindex='-1'])") ?? []).filter((item) => !item.hasAttribute("disabled"));
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      previousFocus?.focus();
+    };
+  }, [pointPendingDelete]);
 
   useEffect(() => {
     async function finalSave() {
@@ -161,7 +220,7 @@ export default function MessageWorkspacePage() {
       keepalive,
     });
     const payload = (await response.json()) as { project?: MessageProject; error?: string };
-    if (!response.ok || !payload.project) throw new Error(payload.error ?? "Save failed. Try again.");
+    if (!response.ok || !payload.project) throw new Error(payload.error ?? "Save failed");
     return payload.project;
   }
 
@@ -240,12 +299,12 @@ export default function MessageWorkspacePage() {
         if (requestVersion === editVersionRef.current) {
           savedVersionRef.current = requestVersion;
           setAutosaveStatus("saved");
-          setSaveMessage("Message saved");
+          setSaveMessage("Message marked as saved.");
           return true;
         }
       } catch {
         setAutosaveStatus("failed");
-        setSaveMessage("Save failed. Try again.");
+        setSaveMessage("Save failed");
         return false;
       } finally {
         inFlightRef.current = false;
@@ -359,7 +418,6 @@ export default function MessageWorkspacePage() {
             <h1 className="mt-2 break-words font-serif text-4xl font-semibold leading-tight text-teal sm:text-5xl">{draft.title}</h1>
             <p className="mt-4 text-sm font-bold uppercase tracking-[0.12em] text-muted">Main passage</p>
             <p className="mt-1 break-words text-lg font-bold text-ink">{draft.mainScripture}</p>
-            <ScriptureText text={draft.mainScriptureText} />
             <p className="mt-4 text-sm font-bold uppercase tracking-[0.12em] text-muted">Big idea</p>
             <p className="mt-1 max-w-3xl text-lg leading-8 text-ink">{draft.bigIdea}</p>
             <div className="mt-5 flex flex-wrap gap-2">
@@ -388,22 +446,40 @@ export default function MessageWorkspacePage() {
               key={point.id}
               point={point}
               number={index + 1}
+              total={draft.points.length}
+              isDragging={draggedPointId === point.id}
+              onDragStart={() => setDraggedPointId(point.id)}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={() => {
+                if (!draggedPointId || draggedPointId === point.id) return;
+                updateDraft((current) => ({
+                  ...current,
+                  points: moveItem(
+                    current.points,
+                    current.points.findIndex((item) => item.id === draggedPointId),
+                    current.points.findIndex((item) => item.id === point.id),
+                  ),
+                }));
+                setDraggedPointId(null);
+              }}
+              onDragEnd={() => setDraggedPointId(null)}
+              onMoveUp={() => updateDraft((current) => ({ ...current, points: moveItem(current.points, index, index - 1) }))}
+              onMoveDown={() => updateDraft((current) => ({ ...current, points: moveItem(current.points, index, index + 1) }))}
               onNotesChange={(notes) => patchPoint(point.id, { notes })}
               onEdit={() => setDetailPanel({ kind: "point", id: point.id })}
               onKeep={() => patchPoint(point.id, { status: "kept" })}
               onRewrite={() =>
                 patchPoint(point.id, {
                   status: "rewritten",
-                  summary: `This point keeps the message close to ${draft.mainScripture} and says it in a plainer way.`,
-                  bullets: point.bullets.map((bullet, bulletIndex) => (bulletIndex === 0 ? `${point.title} is not just an idea to admire; it is a truth to carry into ordinary life.` : bullet)),
-                  application: `${point.application} Let this truth shape one real decision before the day is over.`,
+                  summary: `This point keeps ${point.scripture} connected to ${draft.mainScripture} in plain language.`,
+                  bullets: point.bullets.map((bullet, bulletIndex) => (bulletIndex === 0 ? `${point.scripture} gives this point a truth to carry into ordinary life.` : bullet)),
+                  explanation: `${point.scripture} anchors this movement and helps the church see how ${draft.bigIdea.toLowerCase()}`,
+                  application: `${point.application} Let this Scripture shape one real decision before the day is over.`,
                 })
               }
-              onRemove={() => {
-                updateDraft((current) => {
-                  if (current.points.length === 1) return current;
-                  return { ...current, points: current.points.filter((item) => item.id !== point.id) };
-                });
+              onRemove={(trigger) => {
+                deleteTriggerRef.current = trigger;
+                setPointPendingDelete(point);
               }}
             />
           ))}
@@ -443,8 +519,8 @@ export default function MessageWorkspacePage() {
             <div>
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">Save</p>
               <h2 className="font-serif text-3xl font-semibold text-teal">Save message</h2>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">Autosave keeps this message protected in your account. Use Save Message when you want to mark the project as Saved.</p>
-              <p className="mt-2 text-sm font-bold text-teal">{autosaveStatus === "dirty" ? "Unsaved changes" : autosaveStatus === "saving" ? "Saving..." : autosaveStatus === "failed" ? "Save failed. Try again." : "All changes saved"}</p>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">Autosave protects every edit as a draft. Use Mark as Saved when this message is ready to file as Saved.</p>
+              <p className="mt-2 text-sm font-bold text-teal">{autosaveStatus === "dirty" ? "Unsaved changes" : autosaveStatus === "saving" ? "Saving changes..." : autosaveStatus === "failed" ? "Save failed" : "All changes saved"}</p>
               {saveMessage ? <p className="mt-2 text-sm font-bold text-teal">{saveMessage}</p> : null}
               {autosaveStatus === "failed" ? (
                 <button type="button" onClick={() => void flushAutosave()} className="mt-3 min-h-10 rounded-full border border-line bg-background px-4 py-2 text-sm font-bold text-teal focus:outline-none focus:ring-2 focus:ring-gold">
@@ -452,7 +528,7 @@ export default function MessageWorkspacePage() {
                 </button>
               ) : null}
             </div>
-            <ActionButton filled onClick={() => void saveLatestAndMarkSaved()}>Save Message</ActionButton>
+            <ActionButton filled onClick={() => void saveLatestAndMarkSaved()}>Mark as Saved</ActionButton>
           </div>
         </section>
 
@@ -482,6 +558,19 @@ export default function MessageWorkspacePage() {
           patchPoint={patchPoint}
         />
       ) : null}
+      {pointPendingDelete ? (
+        <DeletePointModal
+          cancelRef={deleteModalCancelRef}
+          onCancel={() => setPointPendingDelete(null)}
+          onConfirm={() => {
+            updateDraft((current) => {
+              if (current.points.length === 1) return current;
+              return { ...current, points: current.points.filter((item) => item.id !== pointPendingDelete.id) };
+            });
+            setPointPendingDelete(null);
+          }}
+        />
+      ) : null}
     </AppShell>
   );
 }
@@ -497,16 +586,36 @@ function IntroductionCard({ bullets, scripture, scriptureText, transition, notes
   );
 }
 
-function PointCard({ point, number, onNotesChange, onEdit, onKeep, onRewrite, onRemove }: { point: MessageDraftPoint; number: number; onNotesChange: (value: string) => void; onEdit: () => void; onKeep: () => void; onRewrite: () => void; onRemove: () => void }) {
+function PointCard({ point, number, total, isDragging, onNotesChange, onEdit, onKeep, onRewrite, onRemove, onMoveUp, onMoveDown, onDragStart, onDragOver, onDrop, onDragEnd }: { point: MessageDraftPoint; number: number; total: number; isDragging: boolean; onNotesChange: (value: string) => void; onEdit: () => void; onKeep: () => void; onRewrite: () => void; onRemove: (trigger: HTMLElement) => void; onMoveUp: () => void; onMoveDown: () => void; onDragStart: () => void; onDragOver: (event: DragEvent<HTMLElement>) => void; onDrop: () => void; onDragEnd: () => void }) {
   return (
-    <article className="rounded-[1.75rem] border border-line bg-cream-strong p-5 shadow-sm sm:p-6">
+    <article
+      draggable
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      onDragEnd={onDragEnd}
+      className={`rounded-[1.75rem] border border-line bg-cream-strong p-5 shadow-sm transition sm:p-6 ${isDragging ? "opacity-60 ring-2 ring-gold" : ""}`}
+    >
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto]">
         <div className="min-w-0">
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">Point {number}{point.status ? ` · ${point.status}` : ""}</p>
-          <h3 className="mt-1 break-words font-serif text-3xl font-semibold leading-tight text-teal">{point.title}</h3>
+          <div className="flex items-start gap-3">
+            <button type="button" aria-label={`Drag to reorder point ${number}`} className="mt-1 grid h-10 w-10 shrink-0 cursor-grab place-items-center rounded-2xl border border-line bg-background text-teal focus:outline-none focus:ring-2 focus:ring-gold">
+              <span aria-hidden="true" className="grid grid-cols-2 gap-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-current" /><span className="h-1.5 w-1.5 rounded-full bg-current" />
+                <span className="h-1.5 w-1.5 rounded-full bg-current" /><span className="h-1.5 w-1.5 rounded-full bg-current" />
+                <span className="h-1.5 w-1.5 rounded-full bg-current" /><span className="h-1.5 w-1.5 rounded-full bg-current" />
+              </span>
+            </button>
+            <div className="min-w-0">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold">Point {number}{point.status ? ` · ${point.status}` : ""}</p>
+              <h3 className="mt-1 break-words font-serif text-3xl font-semibold leading-tight text-teal">{point.title}</h3>
+            </div>
+          </div>
           <ScriptureBlock reference={point.scripture} text={point.scriptureText} />
           <BulletList bullets={point.bullets.slice(0, 4)} />
+          <SectionLine label="Explanation" value={point.explanation} />
           <SectionLine label="Application" value={point.application} />
+          {point.illustrationOptions.length ? <SectionLine label="Illustration options" value={point.illustrationOptions.join(" ")} /> : null}
           <SectionLine label="Transition" value={point.transition} />
           <NotesArea value={point.notes} onChange={onNotesChange} />
         </div>
@@ -514,7 +623,9 @@ function PointCard({ point, number, onNotesChange, onEdit, onKeep, onRewrite, on
           <ActionButton onClick={onEdit}>Edit Details</ActionButton>
           <ActionButton onClick={onKeep}>Keep</ActionButton>
           <ActionButton filled onClick={onRewrite}>Rewrite</ActionButton>
-          <ActionButton onClick={onRemove}>Remove</ActionButton>
+          <ActionButton onClick={onMoveUp} disabled={number === 1}>Move Up</ActionButton>
+          <ActionButton onClick={onMoveDown} disabled={number === total}>Move Down</ActionButton>
+          <ActionButton destructive onClick={(event) => onRemove(event.currentTarget)}>Trash</ActionButton>
         </div>
       </div>
     </article>
@@ -558,10 +669,16 @@ function ScriptureBlock({ reference, text }: { reference: string; text?: string 
 }
 
 function ScriptureText({ text }: { text: string }) {
+  const lines = scriptureLines(text);
+  if (!lines.length) return <p className="mt-2 text-sm leading-6 text-muted">Verse text is not available.</p>;
   return (
-    <div className="mt-2">
-      {text !== MISSING_VERSE_TEXT ? <p className="text-xs font-bold uppercase tracking-[0.12em] text-muted">KJV local text</p> : null}
-      <p className="whitespace-pre-wrap break-words text-sm leading-6 text-ink">“{text}”</p>
+    <div className="mt-2 grid gap-2 text-sm leading-6 text-ink">
+      {lines.map((line, index) => (
+        <p key={`${line.verse}-${index}`} className="break-words">
+          {line.verse ? <strong className="font-extrabold text-teal">{line.verse}: </strong> : null}
+          <span>{line.text}</span>
+        </p>
+      ))}
     </div>
   );
 }
@@ -697,19 +814,27 @@ function PointDetails({ point, patchPoint }: { point: MessageDraftPoint; patchPo
 }
 
 function ScriptureBankEditor({ draft, patchDraft }: { draft: MessageDraft; patchDraft: (patch: Partial<MessageDraft>) => void }) {
+  const supporting = uniqueScriptureItems(draft.scriptureBank).filter((item) => item.reference !== draft.mainScripture);
   return (
     <section className="rounded-2xl border border-line bg-background p-4">
       <div className="flex items-center justify-between gap-3"><h3 className="font-bold text-teal">Scripture Bank</h3><SmallButton onClick={() => patchDraft({ scriptureBank: [...draft.scriptureBank, { id: `scripture-${Date.now()}`, reference: "", text: MISSING_VERSE_TEXT, supportNote: "", fullContext: "" }] })}>Add Scripture</SmallButton></div>
-      <div className="mt-3 grid gap-3">
-        {draft.scriptureBank.map((item) => (
-          <div key={item.id} className="rounded-2xl border border-line bg-cream-strong p-3">
-            <div className="flex items-center justify-between gap-3"><p className="font-bold text-teal">Supporting Scripture</p><SmallButton onClick={() => patchDraft({ scriptureBank: draft.scriptureBank.filter((scripture) => scripture.id !== item.id) })}>Remove</SmallButton></div>
-            <TextArea label="Reference" value={item.reference} onChange={(reference) => patchDraft({ scriptureBank: updateScriptureItem(draft.scriptureBank, item.id, { reference, text: getVerseText(reference) }) })} rows={1} />
-            <TextArea label="KJV verse text" value={item.text} onChange={(text) => patchDraft({ scriptureBank: updateScriptureItem(draft.scriptureBank, item.id, { text }) })} />
-            <TextArea label="Why this supports the message" value={item.supportNote} onChange={(supportNote) => patchDraft({ scriptureBank: updateScriptureItem(draft.scriptureBank, item.id, { supportNote }) })} />
-            <TextArea label="See full context" value={item.fullContext ?? ""} onChange={(fullContext) => patchDraft({ scriptureBank: updateScriptureItem(draft.scriptureBank, item.id, { fullContext }) })} />
+      <div className="mt-4 grid gap-4">
+        <section>
+          <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-gold">Main passage</p>
+          <p className="mt-1 font-bold text-ink">{draft.mainScripture}</p>
+        </section>
+        <section>
+          <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-gold">Supporting Scriptures</p>
+          <div className="mt-3 grid gap-3">
+            {supporting.map((item) => (
+              <div key={item.id} className="rounded-2xl border border-line bg-cream-strong p-3">
+                <div className="flex items-center justify-between gap-3"><p className="font-bold text-teal">Supporting Scripture</p><SmallButton onClick={() => patchDraft({ scriptureBank: draft.scriptureBank.filter((scripture) => scripture.id !== item.id) })}>Remove</SmallButton></div>
+                <TextArea label="Reference" value={item.reference} onChange={(reference) => patchDraft({ scriptureBank: updateScriptureItem(draft.scriptureBank, item.id, { reference, text: getVerseText(reference), supportNote: "", fullContext: "" }) })} rows={1} />
+                <TextArea label="Verse text" value={item.text} onChange={(text) => patchDraft({ scriptureBank: updateScriptureItem(draft.scriptureBank, item.id, { text }) })} />
+              </div>
+            ))}
           </div>
-        ))}
+        </section>
       </div>
     </section>
   );
@@ -770,9 +895,9 @@ function TextArea({ label, value, onChange, rows = 4, placeholder, labelClassNam
   );
 }
 
-function ActionButton({ children, onClick, filled = false, gold = false }: { children: ReactNode; onClick: () => void; filled?: boolean; gold?: boolean }) {
+function ActionButton({ children, onClick, filled = false, gold = false, destructive = false, disabled = false }: { children: ReactNode; onClick: (event: MouseEvent<HTMLButtonElement>) => void; filled?: boolean; gold?: boolean; destructive?: boolean; disabled?: boolean }) {
   return (
-    <button type="button" onClick={onClick} className={`min-h-11 rounded-full px-4 py-2 text-sm font-bold transition focus:outline-none focus:ring-2 focus:ring-gold focus:ring-offset-2 ${filled ? "bg-teal text-cream-strong" : gold ? "bg-gold text-teal-dark" : "border border-line bg-background text-teal"}`}>
+    <button type="button" disabled={disabled} onClick={onClick} className={`min-h-11 rounded-full px-4 py-2 text-sm font-bold transition focus:outline-none focus:ring-2 focus:ring-gold focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-45 ${destructive ? "border border-red-300 bg-red-50 text-red-700" : filled ? "bg-teal text-cream-strong" : gold ? "bg-gold text-teal-dark" : "border border-line bg-background text-teal"}`}>
       {children}
     </button>
   );
@@ -782,34 +907,135 @@ function SmallButton({ children, onClick }: { children: ReactNode; onClick: () =
   return <button type="button" onClick={onClick} className="w-fit rounded-full border border-line bg-background px-3 py-1 text-xs font-bold text-teal focus:outline-none focus:ring-2 focus:ring-gold">{children}</button>;
 }
 
+function DeletePointModal({ cancelRef, onCancel, onConfirm }: { cancelRef: RefObject<HTMLButtonElement | null>; onCancel: () => void; onConfirm: () => void }) {
+  return (
+    <div className="fixed inset-0 z-[60] grid place-items-center bg-ink/40 p-4 print:hidden" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onCancel(); }}>
+      <section id="delete-point-modal" role="dialog" aria-modal="true" aria-labelledby="delete-point-title" className="w-full max-w-md rounded-3xl border border-line bg-cream-strong p-6 shadow-2xl">
+        <h2 id="delete-point-title" className="font-serif text-3xl font-semibold text-teal">Delete this sermon point?</h2>
+        <p className="mt-3 text-sm leading-6 text-muted">This point and any notes inside it will be removed.</p>
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
+          <button ref={cancelRef} type="button" onClick={onCancel} className="min-h-11 rounded-full border border-line bg-background px-5 py-2 text-sm font-bold text-teal focus:outline-none focus:ring-2 focus:ring-gold">Cancel</button>
+          <button type="button" onClick={onConfirm} className="min-h-11 rounded-full bg-red-700 px-5 py-2 text-sm font-bold text-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2">Delete Point</button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function PrintScriptureText({ text }: { text?: string }) {
+  const lines = scriptureLines(text);
+  if (!lines.length) return null;
+  return (
+    <div className="mt-1 grid gap-1">
+      {lines.map((line, index) => (
+        <p key={`${line.verse}-${index}`} className="text-xs leading-snug">
+          {line.verse ? <strong>{line.verse}: </strong> : null}
+          {line.text}
+        </p>
+      ))}
+    </div>
+  );
+}
+
+function PrintSection({ title, children, notes }: { title: string; children: ReactNode; notes?: string }) {
+  return (
+    <section className="mt-6 break-inside-avoid border-t border-black/25 pt-4">
+      <h2 className="break-after-avoid text-base font-bold">{title}</h2>
+      <div className="mt-2">{children}</div>
+      <PrintNotesBlock notes={notes} />
+    </section>
+  );
+}
+
 function PrintPulpitNotes({ draft, active }: { draft: MessageDraft; active: boolean }) {
   return (
     <article className={`${active ? "print:block" : "print:hidden"} hidden print:p-0 print:text-[10.5pt] print:leading-snug print:text-black`}>
       <PrintHeader draft={draft} />
-      <section className="mt-3 break-inside-avoid"><h2 className="text-sm font-bold">Introduction</h2><ul className="list-disc pl-5">{draft.introduction.bullets.slice(0, 3).map((b, i) => <li key={i}>{b}</li>)}</ul><PrintNotesBlock notes={draft.introduction.notes} /></section>
-      <section className="mt-3"><h2 className="text-sm font-bold">Pulpit Outline</h2>{draft.points.map((point, index) => <section key={point.id} className="break-inside-avoid border-t border-black/20 pt-2"><h3 className="font-bold">{index + 1}. {point.title}</h3><p className="text-xs font-semibold">{point.scripture}</p><p className="text-xs">{point.scriptureText}</p><ul className="mt-1 list-disc pl-5">{point.bullets.slice(0, 3).map((bullet, bulletIndex) => <li key={bulletIndex}>{bullet}</li>)}</ul><PrintLine label="Application" value={point.application} /><PrintLine label="Transition" value={point.transition} /><PrintNotesBlock notes={point.notes} /></section>)}</section>
-      <section className="mt-3 break-inside-avoid border-t border-black/30 pt-2"><ul className="list-disc pl-5">{draft.closing.bullets.slice(0, 3).map((b, i) => <li key={i}>{b}</li>)}</ul><PrintLine label="Prayer cue" value={draft.closing.prayer} /><PrintNotesBlock notes={draft.closing.notes} /></section>
+      <PrintSection title="Introduction" notes={draft.introduction.notes}>
+        <ul className="list-disc pl-5">{draft.introduction.bullets.slice(0, 3).map((b, i) => <li key={i}>{b}</li>)}</ul>
+        {draft.introduction.scripture ? <p className="mt-2 text-xs font-semibold">{draft.introduction.scripture}</p> : null}
+        <PrintScriptureText text={draft.introduction.scriptureText} />
+      </PrintSection>
+      <section className="mt-7">
+        <h2 className="text-base font-bold">Pulpit Outline</h2>
+        {draft.points.map((point, index) => (
+          <section key={point.id} className="mt-6 break-inside-auto border-t border-black/25 pt-4">
+            <h3 className="break-after-avoid text-base font-bold">{index + 1}. {point.title}</h3>
+            <p className="mt-1 text-xs font-semibold">{point.scripture}</p>
+            <PrintScriptureText text={point.scriptureText} />
+            <ul className="mt-2 list-disc pl-5">{point.bullets.slice(0, 3).map((bullet, bulletIndex) => <li key={bulletIndex}>{bullet}</li>)}</ul>
+            <PrintLine label="Application" value={point.application} />
+            <PrintLine label="Transition" value={point.transition} />
+            <PrintNotesBlock notes={point.notes} />
+          </section>
+        ))}
+      </section>
+      <PrintSection title="Closing and Prayer" notes={draft.closing.notes}>
+        <ul className="list-disc pl-5">{draft.closing.bullets.slice(0, 3).map((b, i) => <li key={i}>{b}</li>)}</ul>
+        {draft.closing.scripture ? <p className="mt-2 text-xs font-semibold">{draft.closing.scripture}</p> : null}
+        <PrintScriptureText text={draft.closing.scriptureText} />
+        <PrintLine label="Prayer cue" value={draft.closing.prayer} />
+      </PrintSection>
     </article>
   );
 }
 
 function PrintFullPreparationNotes({ draft, active }: { draft: MessageDraft; active: boolean }) {
+  const supporting = uniqueScriptureItems(draft.scriptureBank).filter((item) => item.reference !== draft.mainScripture);
   return (
     <article className={`${active ? "print:block" : "print:hidden"} hidden print:p-0 print:text-[10.5pt] print:leading-snug print:text-black`}>
       <PrintHeader draft={draft} />
-      {draft.contextNotes.length ? <section className="mt-4 break-inside-avoid"><h2 className="text-base font-bold">Passage Context</h2>{draft.contextNotes.filter(Boolean).map((note, index) => <p key={index}>{note}</p>)}</section> : null}
+      {draft.contextNotes.length ? <section className="mt-5 break-inside-avoid border-t border-black/25 pt-4"><h2 className="text-base font-bold">Passage Context</h2>{draft.contextNotes.filter(Boolean).map((note, index) => <p key={index} className="mt-1">{note}</p>)}</section> : null}
       {draft.pastoralCareNote ? <PrintLine label="Pastoral care note" value={draft.pastoralCareNote.text} /> : null}
-      <section className="mt-4 break-inside-avoid"><h2 className="text-base font-bold">Scripture Bank</h2>{draft.scriptureBank.map((item) => <div key={item.id} className="break-inside-avoid"><p><strong>{item.reference}:</strong> {item.text}</p>{item.supportNote ? <p><strong>Supports:</strong> {item.supportNote}</p> : null}{item.fullContext ? <p><strong>Context:</strong> {item.fullContext}</p> : null}</div>)}</section>
-      <section className="mt-4 break-inside-avoid"><h2 className="text-base font-bold">Introduction</h2><ul className="list-disc pl-5">{draft.introduction.bullets.map((b, i) => <li key={i}>{b}</li>)}</ul><PrintLine label="Hook" value={draft.introduction.hook} /><PrintLine label="Transition" value={draft.introduction.firstMovementTransition} /><PrintNotesBlock notes={draft.introduction.notes} /></section>
-      <section className="mt-4"><h2 className="text-base font-bold">Message Points</h2>{draft.points.map((point, index) => <section key={point.id} className="break-inside-avoid border-t border-black/20 pt-2"><h3 className="font-bold">{index + 1}. {point.title}</h3><p className="text-sm font-semibold">{point.scripture}</p><p className="text-sm">{point.scriptureText}</p><ul className="mt-1 list-disc pl-5">{point.bullets.map((bullet, bulletIndex) => <li key={bulletIndex}>{bullet}</li>)}</ul><PrintLine label="Explanation" value={point.explanation} /><PrintLine label="Application" value={point.application} />{point.illustrationOptions.length ? <PrintLine label="Illustration options" value={point.illustrationOptions.join(" | ")} /> : null}<PrintLine label="Transition" value={point.transition} /><PrintNotesBlock notes={point.notes} /></section>)}</section>
-      <section className="mt-4 break-inside-avoid border-t border-black/30 pt-3"><h2 className="text-base font-bold">Closing</h2><ul className="list-disc pl-5">{draft.closing.bullets.map((b, i) => <li key={i}>{b}</li>)}</ul><PrintLine label="Application" value={draft.closing.closingApplication} /><PrintLine label="Prayer cue" value={draft.closing.prayer} /><PrintNotesBlock notes={draft.closing.notes} /></section>
+      <section className="mt-5 break-inside-avoid border-t border-black/25 pt-4">
+        <h2 className="text-base font-bold">Scripture Bank</h2>
+        <p className="mt-2 text-xs font-bold uppercase tracking-[0.12em]">Main Passage</p>
+        <p>{draft.mainScripture}</p>
+        {supporting.length ? <p className="mt-3 text-xs font-bold uppercase tracking-[0.12em]">Supporting Scriptures</p> : null}
+        {supporting.map((item) => (
+          <div key={item.id} className="mt-2 break-inside-avoid">
+            <p><strong>{item.reference}</strong></p>
+            {scriptureLines(item.text).length <= 3 ? <PrintScriptureText text={item.text} /> : null}
+          </div>
+        ))}
+      </section>
+      <PrintSection title="Introduction" notes={draft.introduction.notes}>
+        <ul className="list-disc pl-5">{draft.introduction.bullets.map((b, i) => <li key={i}>{b}</li>)}</ul>
+        {draft.introduction.scripture ? <p className="mt-2 text-xs font-semibold">{draft.introduction.scripture}</p> : null}
+        <PrintScriptureText text={draft.introduction.scriptureText} />
+        <PrintLine label="Hook" value={draft.introduction.hook} />
+        <PrintLine label="Transition" value={draft.introduction.firstMovementTransition} />
+      </PrintSection>
+      <section className="mt-7">
+        <h2 className="text-base font-bold">Message Points</h2>
+        {draft.points.map((point, index) => (
+          <section key={point.id} className="mt-6 break-inside-auto border-t border-black/25 pt-4">
+            <h3 className="break-after-avoid text-base font-bold">{index + 1}. {point.title}</h3>
+            <p className="mt-1 text-sm font-semibold">{point.scripture}</p>
+            <PrintScriptureText text={point.scriptureText} />
+            <ul className="mt-2 list-disc pl-5">{point.bullets.map((bullet, bulletIndex) => <li key={bulletIndex}>{bullet}</li>)}</ul>
+            <PrintLine label="Explanation" value={point.explanation} />
+            <PrintLine label="Application" value={point.application} />
+            {point.illustrationOptions.length ? <PrintLine label="Illustration options" value={point.illustrationOptions.join(" | ")} /> : null}
+            <PrintLine label="Transition" value={point.transition} />
+            <PrintNotesBlock notes={point.notes} />
+          </section>
+        ))}
+      </section>
+      <PrintSection title="Closing and Prayer" notes={draft.closing.notes}>
+        <ul className="list-disc pl-5">{draft.closing.bullets.map((b, i) => <li key={i}>{b}</li>)}</ul>
+        {draft.closing.scripture ? <p className="mt-2 text-xs font-semibold">{draft.closing.scripture}</p> : null}
+        <PrintScriptureText text={draft.closing.scriptureText} />
+        <PrintLine label="Application" value={draft.closing.closingApplication} />
+        <PrintLine label="Prayer cue" value={draft.closing.prayer} />
+      </PrintSection>
     </article>
   );
 }
 
 function PrintNotesBlock({ notes }: { notes?: string }) {
   return (
-    <div className="mt-2 break-inside-avoid">
+    <div className="mt-4 mb-5 break-inside-avoid">
       <p className="text-xs font-bold uppercase tracking-[0.12em]">My Notes</p>
       {notes ? <p className="mt-1 whitespace-pre-wrap">{notes}</p> : null}
       <div className="mt-2 grid gap-3" aria-hidden="true">
@@ -822,7 +1048,7 @@ function PrintNotesBlock({ notes }: { notes?: string }) {
 }
 
 function PrintHeader({ draft }: { draft: MessageDraft }) {
-  return <header className="border-b border-black/30 pb-3"><p className="text-xs font-bold uppercase tracking-[0.16em]">My Pulpit Pro</p><h1 className="mt-2 text-2xl font-bold">{draft.title}</h1><p className="mt-1 font-semibold">Main passage: {draft.mainScripture}</p><p className="text-sm">{draft.mainScriptureText}</p><p className="mt-1">Big idea: {draft.bigIdea}</p><p className="mt-1 text-sm">{draft.lengthLabel} · Preferred translation: {draft.translation} · Local verse text shown in KJV where available</p></header>;
+  return <header className="break-after-avoid border-b border-black/30 pb-3"><p className="text-xs font-bold uppercase tracking-[0.16em]">My Pulpit Pro</p><h1 className="mt-2 text-2xl font-bold">{draft.title}</h1><p className="mt-1 font-semibold">Main passage: {draft.mainScripture}</p><p className="mt-1">Big idea: {draft.bigIdea}</p><p className="mt-1 text-sm">{draft.lengthLabel} · Preferred translation: {draft.translation}</p></header>;
 }
 
 function PrintLine({ label, value }: { label: string; value?: string }) {

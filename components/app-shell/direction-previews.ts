@@ -9,10 +9,7 @@ function rotateItems<T>(items: T[], offset: number, count: number) {
 }
 
 function withPreviewLabel(direction: SampleDirection): SampleDirection {
-  return {
-    ...direction,
-    focus: `Preview sample: ${direction.focus}`,
-  };
+  return direction;
 }
 
 export function getExploreDirections(theme: string, tone: string, offset: number): SampleDirection[] {
@@ -52,7 +49,7 @@ for (const topic of Object.keys(aliases)) {
     title: `${prefix} ${topic[0].toUpperCase()}${topic.slice(1)}`,
     scripture: ["Psalm 46:1-3", "Philippians 4:4-9", "Hebrews 12:1-3", "Matthew 6:25-34", "Romans 15:13"][index],
     bigIdea: `God shapes ${topic} through Scripture-centered trust and faithful obedience.`,
-    angle: `A ${topic}-focused preview direction with concrete pastoral application for ordinary church life.`,
+    angle: `A ${topic}-focused direction with concrete pastoral application for ordinary church life.`,
     focus: `${topic[0].toUpperCase()}${topic.slice(1)}, discipleship, and practical response.`,
   }));
 }
@@ -66,10 +63,10 @@ export function getDevelopDirections(idea: string, passage: string, response: st
   const entered = idea.trim() || "your entered subject";
   const topic = detectTopic(idea) ?? detectTopic(response);
   const base = topic ? topicDirections[topic] : [1, 2, 3, 4, 5].map((number) => ({
-    title: `${entered}: Preview Direction ${number}`,
+    title: `${entered}`,
     scripture: passage.trim() || ["Proverbs 3:5-6", "Psalm 119:105", "James 1:5", "Colossians 3:17", "Romans 12:1-2"][number - 1],
     bigIdea: `A Scripture-centered message can help the church respond faithfully to ${entered}.`,
-    angle: `This local preview intentionally incorporates "${entered}" instead of using the generic idea pool.`,
+    angle: `This direction incorporates "${entered}" instead of using the generic idea pool.`,
     focus: response.trim() ? `Practical response: ${response.trim()}` : `Pastoral application for ${entered}.`,
   }));
 
@@ -89,7 +86,7 @@ export function getWeeklyConcernDirections(concern: TimelyConcern | null): Sampl
   const refs = concern?.suggestedRefs.split(";").map((ref) => ref.trim()) ?? ["Psalm 46", "Romans 15:13", "1 Peter 5:6-7"];
   return [
     { title: `${category}: A Faithful First Response`, scripture: refs[0] ?? "Psalm 46", bigIdea: concern?.pastoralTheme ?? "God meets His people in the concerns they carry.", angle: concern?.possibleDirection ?? "A pastoral direction for naming the concern before God.", focus: "Prayerful trust and pastoral clarity." },
-    { title: `${category}: Naming What Hurts`, scripture: refs[1] ?? refs[0] ?? "Psalm 13", bigIdea: "The church can tell the truth about pain while remaining anchored in God.", angle: `A direction connected to ${category.toLowerCase()} that gives language for lament, care, and hope.`, focus: "Lament, honesty, and comfort." },
+    { title: `${category}: Naming What Hurts`, scripture: refs[1] ?? refs[0] ?? "Psalm 13", bigIdea: "The church can tell the truth about pain while remaining anchored in God.", angle: `A message direction connected to ${category.toLowerCase()} that gives language for lament, care, and hope.`, focus: "Lament, honesty, and comfort." },
     { title: `${category}: Practicing Hope Together`, scripture: refs[2] ?? refs[0] ?? "Romans 15:13", bigIdea: "Hope grows stronger when God's people carry burdens together.", angle: `A community-care message shaped by the selected concern: ${concern?.context ?? category}.`, focus: "Community care and shared courage." },
     { title: `${category}: Courage for the Next Faithful Step`, scripture: refs[0] ?? "Joshua 1:9", bigIdea: "God often leads His people through the next obedient step, not the whole map.", angle: `A practical message for faithful action amid ${category.toLowerCase()}.`, focus: "Courage, wisdom, and obedience." },
     { title: `${category}: Peace That Can Be Practiced`, scripture: refs[1] ?? "Philippians 4:4-9", bigIdea: "The peace of God forms habits of prayer, care, and steady witness.", angle: `A pastoral focus that visibly matches ${category.toLowerCase()} rather than a generic direction list.`, focus: "Peace, prayer, and faithful presence." },

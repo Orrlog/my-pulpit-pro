@@ -648,9 +648,6 @@ export function NewMessageWizard({
                     Refresh Ideas
                   </button>
                 ) : null}
-                <span className="rounded-full bg-gold/20 px-4 py-2 text-sm font-bold text-teal">
-                  Five preview cards
-                </span>
               </div>
             </div>
 
