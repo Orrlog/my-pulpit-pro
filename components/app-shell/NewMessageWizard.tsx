@@ -23,7 +23,7 @@ import {
   getVerseText,
   type MessageDraft,
 } from "./message-draft-storage";
-import { createDraftProject, getUsageSummary } from "./message-project-library";
+
 import {
   getDevelopDirections,
   getExploreDirections,
@@ -71,6 +71,7 @@ export function NewMessageWizard({
   const [creationError, setCreationError] = useState("");
   const [ownConcern, setOwnConcern] = useState("");
   const [selectedDirection, setSelectedDirection] = useState<number | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
   const router = useRouter();
 
   const path = useMemo(
@@ -122,15 +123,9 @@ export function NewMessageWizard({
     setSelectedDirection(null);
   }
 
-  function createMessageDraft() {
+  async function createMessageDraft() {
     if (selectedDirection === null) return;
     setCreationError("");
-    const usage = getUsageSummary();
-    if (usage.used >= usage.total) {
-      setCreationError(`All ${usage.total} message projects have been used for ${usage.month}. Exploring message ideas is still free.`);
-      return;
-    }
-
     const direction = directionCards[selectedDirection];
     const pastoralFocus = direction.focus.replace(/^Preview sample:\s*/i, "");
     const mode = messageModes.find((item) => item.id === selectedMode) ?? messageModes[0];
@@ -202,13 +197,24 @@ export function NewMessageWizard({
       }),
     };
 
-    const result = createDraftProject(cleanMessageDraft(draft));
-    if (!result.project) {
-      setCreationError(result.error ?? "This message project could not be created.");
-      return;
+    setIsCreating(true);
+    try {
+      const response = await fetch("/api/message-projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ draft: cleanMessageDraft(draft) }),
+      });
+      const payload = (await response.json()) as { project?: { id: string }; error?: string };
+      if (!response.ok || !payload.project) {
+        setCreationError(payload.error ?? "This message project could not be created right now.");
+        return;
+      }
+      router.push(`/message-workspace?project=${payload.project.id}`);
+    } catch {
+      setCreationError("This message project could not be created right now.");
+    } finally {
+      setIsCreating(false);
     }
-
-    router.push(`/message-workspace?project=${result.project.id}`);
   }
 
   return (
@@ -642,9 +648,6 @@ export function NewMessageWizard({
                     Refresh Ideas
                   </button>
                 ) : null}
-                <span className="rounded-full bg-gold/20 px-4 py-2 text-sm font-bold text-teal">
-                  Five preview cards
-                </span>
               </div>
             </div>
 
@@ -739,10 +742,10 @@ export function NewMessageWizard({
               }
               setStage((current) => Math.min(stages.length - 1, current + 1));
             }}
-            disabled={nextDisabled}
+            disabled={nextDisabled || isCreating}
             className="min-h-11 rounded-full bg-teal px-5 py-2 text-sm font-bold text-cream-strong disabled:cursor-not-allowed disabled:opacity-45"
           >
-            {isFinalStage ? "Create Message" : "Continue"}
+            {isCreating ? "Creating..." : isFinalStage ? "Create Message" : "Continue"}
           </button>
         </div>
       </section>

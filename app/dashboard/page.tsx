@@ -3,12 +3,14 @@ import { AppShell } from "@/components/app-shell/AppShell";
 import { DashboardStartPaths } from "@/components/app-shell/DashboardStartPaths";
 import { RecentMessages } from "@/components/app-shell/RecentMessages";
 import { UsageCard } from "@/components/app-shell/UsageCard";
+import { listMessageProjects } from "@/lib/message-projects/server";
 
 export const metadata = {
   title: "Dashboard | My Pulpit Pro",
 };
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  const recentProjects = await listMessageProjects(3);
   return (
     <AppShell title="Welcome back. What message are you preparing next?">
       <div className="grid gap-8">
@@ -36,7 +38,7 @@ export default function DashboardPage() {
               View All Messages
             </Link>
           </div>
-<RecentMessages />
+<RecentMessages projects={recentProjects.data ?? []} />
         </section>
       </div>
     </AppShell>
