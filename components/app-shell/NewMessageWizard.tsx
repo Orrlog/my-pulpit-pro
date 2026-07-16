@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
+import type { DevelopGenerationResponse, DevelopMessageGenerationInput } from "@/lib/message-generation/develop-types";
 import {
   messageLengths,
   messageModes,
@@ -199,17 +200,54 @@ export function NewMessageWizard({
 
     setIsCreating(true);
     try {
+      let draftToCreate = draft;
+      let usedFallbackGeneration = false;
+
+      if (selectedPath === "develop") {
+        const generationRequest: DevelopMessageGenerationInput = {
+          startingPath: "develop",
+          startingPathLabel: path.label,
+          messageMode: selectedMode,
+          messageModeLabel: mode.label,
+          length: length as "30" | "45" | "60",
+          lengthLabel: selectedLength.label,
+          translation,
+          developIdea: idea.trim(),
+          developPassage: passage.trim(),
+          desiredResponse: response.trim(),
+          direction: {
+            title: direction.title,
+            scripture: direction.scripture,
+            bigIdea: direction.bigIdea,
+            angle: direction.angle,
+            focus: direction.focus,
+          },
+        };
+        const generationResponse = await fetch("/api/message-generation/develop", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(generationRequest),
+        });
+        const generationPayload = (await generationResponse.json()) as Partial<DevelopGenerationResponse> & { error?: string };
+        if (!generationResponse.ok || !generationPayload.draft) {
+          setCreationError(generationPayload.error ?? "This message could not be generated right now.");
+          return;
+        }
+        draftToCreate = generationPayload.draft;
+        usedFallbackGeneration = generationPayload.generationSource === "curated-fallback";
+      }
+
       const response = await fetch("/api/message-projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ draft: cleanMessageDraft(draft) }),
+        body: JSON.stringify({ draft: cleanMessageDraft(draftToCreate) }),
       });
       const payload = (await response.json()) as { project?: { id: string }; error?: string };
       if (!response.ok || !payload.project) {
         setCreationError(payload.error ?? "This message project could not be created right now.");
         return;
       }
-      router.push(`/message-workspace?project=${payload.project.id}`);
+      router.push(`/message-workspace?project=${payload.project.id}${usedFallbackGeneration ? "&generation=fallback" : ""}`);
     } catch {
       setCreationError("This message project could not be created right now.");
     } finally {

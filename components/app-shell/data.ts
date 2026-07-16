@@ -90,19 +90,19 @@ export const messageLengths = [
   {
     value: "30",
     label: "30 minutes",
-    description: "Usually 3 main points with focused application and a concise closing.",
+    description: "Approximately six developed message movements with focused application and a concise closing.",
   },
   {
     value: "45",
     label: "45 minutes",
     description:
-      "Usually 3 to 4 main points with supporting Scripture, stronger development, and fuller application.",
+      "Approximately eight developed message movements with supporting Scripture, stronger development, and fuller application.",
   },
   {
     value: "60",
     label: "60 minutes",
     description:
-      "Usually 4 to 6 main points with deeper Scripture support, subpoints, reflection, and expanded application.",
+      "Approximately ten developed message movements with deeper Scripture support, reflection, and expanded application.",
   },
 ];
 

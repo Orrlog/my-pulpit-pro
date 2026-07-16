@@ -16,8 +16,7 @@ internal application shell and new-message flow.
 - Signup placeholder route at `/signup`
 - ESLint and production build scripts
 
-The current build intentionally does not include Supabase, Stripe, OpenAI API calls, paid billing,
-authentication, Bible API integrations, sermon generation, or permanent database storage.
+The current build includes the database-backed message-project foundation and the first server-side AI-generation slice for Develop My Message. It does not include Stripe, paid billing, Bible API integrations, or AI generation for Explore Message Ideas or Speak to This Week.
 
 ## Local Development
 
@@ -37,6 +36,12 @@ Run lint:
 
 ```bash
 npm run lint
+```
+
+Run focused message-generation checks:
+
+```bash
+npm run test:message-generation
 ```
 
 Run the production build:
@@ -68,3 +73,14 @@ Useful preview URLs:
 ## Product Boundary
 
 My Pulpit Pro is built to support sermon preparation, not replace the pastor. The pastor remains responsible for Scripture study, prayer, theological judgment, pastoral conviction, calling, personality, and voice.
+
+## Server-side AI setup
+
+Develop My Message can use the OpenAI Responses API from a server-only route. Add these variables to local and Vercel Preview environments; do not prefix them with `NEXT_PUBLIC_` and do not commit real secrets.
+
+```bash
+OPENAI_API_KEY=
+OPENAI_MODEL=gpt-5.6-terra
+```
+
+`OPENAI_MODEL` is optional at runtime and defaults to `gpt-5.6-terra` when omitted. If OpenAI is unavailable, the app creates a valid draft with the reliable curated starter generator.
