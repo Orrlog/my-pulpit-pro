@@ -598,8 +598,8 @@ export default function MessageWorkspacePage() {
 function IntroductionCard({ bullets, scripture, scriptureText, transition, notes, onNotesChange, onEdit }: { bullets: string[]; scripture?: string; scriptureText?: string; transition: string; notes: string; onNotesChange: (value: string) => void; onEdit: () => void }) {
   return (
     <OutlineCard label="Introduction" title="Start here" onEdit={onEdit}>
-      <BulletList bullets={bullets} />
       {scripture ? <ScriptureBlock reference={scripture} text={scriptureText} /> : null}
+      <BulletList bullets={bullets} />
       <SectionLine label="Transition" value={transition} />
       <NotesArea value={notes} onChange={onNotesChange} />
     </OutlineCard>
@@ -982,9 +982,9 @@ function PrintPulpitNotes({ draft, active }: { draft: MessageDraft; active: bool
     <article className={`${active ? "print:block" : "print:hidden"} hidden print:p-0 print:text-[10.5pt] print:leading-snug print:text-black`}>
       <PrintHeader draft={draft} compact />
       <PrintSection title="Introduction" notes={draft.introduction.notes}>
-        <ul className="list-disc pl-5">{draft.introduction.bullets.slice(0, 3).map((b, i) => <li key={i}>{b}</li>)}</ul>
         {draft.introduction.scripture ? <p className="mt-2 text-xs font-semibold">{draft.introduction.scripture}</p> : null}
         <PrintScriptureText text={draft.introduction.scriptureText} />
+        <ul className="mt-2 list-disc pl-5">{draft.introduction.bullets.slice(0, 3).map((b, i) => <li key={i}>{b}</li>)}</ul>
       </PrintSection>
       <section className="mt-7">
         {draft.points.map((point, index) => (
@@ -1029,9 +1029,9 @@ function PrintFullPreparationNotes({ draft, active }: { draft: MessageDraft; act
         ))}
       </section>
       <PrintSection title="Introduction" notes={draft.introduction.notes}>
-        <ul className="list-disc pl-5">{draft.introduction.bullets.map((b, i) => <li key={i}>{b}</li>)}</ul>
         {draft.introduction.scripture ? <p className="mt-2 text-xs font-semibold">{draft.introduction.scripture}</p> : null}
         <PrintScriptureText text={draft.introduction.scriptureText} />
+        <ul className="mt-2 list-disc pl-5">{draft.introduction.bullets.map((b, i) => <li key={i}>{b}</li>)}</ul>
         <PrintLine label="Hook" value={draft.introduction.hook} />
         <PrintLine label="Transition" value={draft.introduction.firstMovementTransition} />
       </PrintSection>

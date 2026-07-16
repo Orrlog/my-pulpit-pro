@@ -634,8 +634,18 @@ export function buildInitialPoints(input: {
   const bank = input.scriptureBank?.length ? input.scriptureBank : buildScriptureBank(input);
   const seeds = movementSeedsFor(input);
   const supportBank = bank.filter((item) => item.reference !== input.mainScripture);
+  const usedTitles = new Set<string>();
+  const usedScriptures = new Set<string>();
+  const points: MessageDraftPoint[] = [];
 
-  return Array.from({ length: count }, (_, index) => buildPointForIndex(input, supportBank, seeds, index));
+  for (let index = 0; index < count; index += 1) {
+    const point = buildPointForIndex(input, supportBank, seeds, index, usedTitles, usedScriptures);
+    usedTitles.add(point.title);
+    usedScriptures.add(point.scripture);
+    points.push(point);
+  }
+
+  return points;
 }
 
 function buildPointForIndex(input: { directionTitle: string; mainScripture: string; bigIdea: string; pastoralFocus: string; angle: string }, supportBank: ScriptureBankItem[], seeds: MovementSeed[], index: number, usedTitles = new Set<string>(), usedScriptures = new Set<string>()): MessageDraftPoint {

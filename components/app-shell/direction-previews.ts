@@ -67,7 +67,7 @@ function genericDevelopDirections(entered: string, passage: string, response: st
     {
       title: titleFromSubject(subject, "God's Strength for Weary People"),
       scripture: passage.trim() || refs[0],
-      bigIdea: `When ${subject.toLowerCase()} feels heavy, God meets weakness with strength that human effort cannot manufacture.`,
+      bigIdea: `God meets weary people with strength that human effort cannot manufacture.`,
       angle: `A pastoral direction that names weariness honestly and moves the church toward God's renewing power.`,
       focus: desired || "Weariness, human limits, and renewed trust in the Lord.",
     },
