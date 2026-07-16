@@ -42,21 +42,35 @@ const topicDirections: Record<string, SampleDirection[]> = {
   ],
 };
 
-const aliases: Record<string, string> = { hope: "hope", fear: "fear", faith: "faith", courage: "courage", anxiety: "anxiety", family: "family", prayer: "prayer", perseverance: "perseverance", purpose: "purpose", relationships: "relationships" };
+topicDirections.restoration = [
+  { title: "Failure Is Not the End", scripture: "John 21:15-19", bigIdea: "Jesus can confront real failure without discarding the person who failed.", angle: "A restoration direction that lets Christ name the wound honestly while moving the listener beyond shame.", focus: "Honest failure, gracious confrontation, and renewed hope." },
+  { title: "Love Before Assignment", scripture: "John 21:15-19", bigIdea: "Restored service grows from renewed love for Christ, not from an attempt to outrun shame.", angle: "A heart-level message that slows down around Jesus' repeated question and Peter's restored relationship with Him.", focus: "Love for Christ, identity, and service after failure." },
+  { title: "Grace Restores Responsibility", scripture: "John 21:15-19", bigIdea: "Jesus' grace gives Peter meaningful responsibility instead of leaving him defined by denial.", angle: "A calling-focused direction about how restoration often includes entrusting wounded people with faithful care for others.", focus: "Grace, responsibility, and caring for Christ's sheep." },
+  { title: "Follow Me After Failure", scripture: "John 21:15-19", bigIdea: "The next faithful step after failure is still to follow Jesus.", angle: "A discipleship direction that moves from regret over the past toward obedience in the next step Christ gives.", focus: "Repentance, obedience, and faithful next steps." },
+  { title: "From Shame to Shepherding", scripture: "John 21:15-19", bigIdea: "Christ can turn restored people outward in humble care for others.", angle: "A pastoral-care direction that traces how grace moves a person from collapsed shame into concrete love for people.", focus: "Restoration, humility, and serving others with care." },
+];
 
-for (const topic of Object.keys(aliases)) {
-  topicDirections[topic] = ["A Foundation for", "When We Struggle With", "Practicing", "Christ Meets Us in", "A Church Shaped by"].map((prefix, index) => ({
-    title: `${prefix} ${topic[0].toUpperCase()}${topic.slice(1)}`,
-    scripture: ["Psalm 46:1-3", "Philippians 4:4-9", "Hebrews 12:1-3", "Matthew 6:25-34", "Romans 15:13"][index],
-    bigIdea: `God shapes ${topic} through Scripture-centered trust and faithful obedience.`,
-    angle: `A ${topic}-focused direction with concrete pastoral application for ordinary church life.`,
-    focus: `${topic[0].toUpperCase()}${topic.slice(1)}, discipleship, and practical response.`,
-  }));
-}
+topicDirections.faith = [
+  { title: "Trust When Sight Is Limited", scripture: "Hebrews 11:1-6", bigIdea: "Faith receives God's promise before every outcome is visible.", angle: "A direction for people who need to trust without pretending uncertainty is easy.", focus: "Trust, promise, and patient obedience." },
+  { title: "Faith That Keeps Walking", scripture: "2 Corinthians 5:7", bigIdea: "God calls His people to walk by faith when the next step is clearer than the full road.", angle: "A practical discipleship direction about obedience in ordinary decisions.", focus: "Daily obedience and spiritual steadiness." },
+  { title: "Bring Your Unbelief", scripture: "Mark 9:14-29", bigIdea: "Jesus meets honest weakness with mercy and help.", angle: "A compassionate direction for people who feel ashamed that their faith is not stronger.", focus: "Honesty, prayer, and dependence." },
+  { title: "Faith Working Through Love", scripture: "Galatians 5:6", bigIdea: "Living faith becomes visible through love-shaped obedience.", angle: "A church-life direction that connects belief to tangible care for others.", focus: "Love, obedience, and visible discipleship." },
+  { title: "Rooted in Christ", scripture: "Colossians 2:6-7", bigIdea: "Faith matures as believers keep receiving and walking in Christ.", angle: "A formation direction about rootedness, gratitude, and steady growth.", focus: "Maturity, gratitude, and endurance." },
+];
 
-function detectTopic(input: string) {
+const topicAliases: Record<string, string[]> = {
+  restoration: ["restore", "restores", "restored", "restoring", "restoration", "failure", "failed", "failing", "denial", "shame", "next step"],
+  forgiveness: ["forgive", "forgiveness", "forgiven", "mercy", "resentment", "bitterness"],
+  grief: ["grief", "grieve", "loss", "mourning", "sorrow", "funeral"],
+  faith: ["faith", "belief", "believe", "trusting god"],
+};
+
+export function detectDevelopTopic(input: string) {
   const lower = input.toLowerCase();
-  return Object.keys(topicDirections).find((topic) => lower.includes(topic));
+  return Object.entries(topicAliases).find(([, terms]) => terms.some((term) => {
+    const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+");
+    return new RegExp(`(^|[^a-z])${escaped}([^a-z]|$)`, "i").test(lower);
+  }))?.[0];
 }
 
 function genericDevelopDirections(entered: string, passage: string, response: string): SampleDirection[] {
@@ -112,7 +126,7 @@ function titleFromSubject(subject: string, fallback: string) {
 
 export function getDevelopDirections(idea: string, passage: string, response: string): SampleDirection[] {
   const entered = idea.trim() || "your entered subject";
-  const topic = detectTopic(idea) ?? detectTopic(response);
+  const topic = detectDevelopTopic(idea) ?? detectDevelopTopic(response);
   const base = topic ? topicDirections[topic] : genericDevelopDirections(entered, passage, response);
 
   return base.map((direction) => withPreviewLabel({

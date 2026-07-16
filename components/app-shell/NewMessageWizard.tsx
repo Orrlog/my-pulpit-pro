@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
+import type { DevelopDirectionGenerationInput, DevelopDirectionGenerationResponse } from "@/lib/message-generation/develop-directions-schema";
 import type { DevelopGenerationResponse, DevelopMessageGenerationInput } from "@/lib/message-generation/develop-types";
 import {
   messageLengths,
@@ -11,6 +12,7 @@ import {
   themes,
   tones,
   translations,
+  type SampleDirection,
   type StartPathId,
 } from "./data";
 import {
@@ -73,6 +75,10 @@ export function NewMessageWizard({
   const [ownConcern, setOwnConcern] = useState("");
   const [selectedDirection, setSelectedDirection] = useState<number | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const [developDirectionCards, setDevelopDirectionCards] = useState<SampleDirection[] | null>(null);
+  const [developDirectionKey, setDevelopDirectionKey] = useState("");
+  const [isLoadingDevelopDirections, setIsLoadingDevelopDirections] = useState(false);
+  const [developDirectionNotice, setDevelopDirectionNotice] = useState("");
   const router = useRouter();
 
   const path = useMemo(
@@ -82,9 +88,18 @@ export function NewMessageWizard({
   const visibleConcerns = useMemo(() => getVisibleConcerns(concernOffset), [concernOffset]);
   const selectedConcern =
     selectedConcernIndex === null ? null : visibleConcerns[selectedConcernIndex] ?? null;
+  const currentDevelopDirectionKey = useMemo(
+    () => JSON.stringify({
+      idea: idea.trim(),
+      passage: passage.trim(),
+      response: response.trim(),
+      messageMode: selectedMode,
+    }),
+    [idea, passage, response, selectedMode],
+  );
   const directionCards = useMemo(() => {
     if (selectedPath === "develop") {
-      return getDevelopDirections(idea, passage, response);
+      return developDirectionCards ?? getDevelopDirections(idea, passage, response);
     }
 
     if (selectedPath === "week") {
@@ -92,9 +107,9 @@ export function NewMessageWizard({
     }
 
     return getExploreDirections(theme, tone, ideaOffset);
-  }, [idea, ideaOffset, passage, response, selectedConcern, selectedPath, theme, tone]);
+  }, [developDirectionCards, idea, ideaOffset, passage, response, selectedConcern, selectedPath, theme, tone]);
   const isFinalStage = stage === stages.length - 1;
-  const nextDisabled = isFinalStage && selectedDirection === null;
+  const nextDisabled = (isFinalStage && selectedDirection === null) || isLoadingDevelopDirections;
 
   function choosePath(nextPath: StartPathId) {
     setSelectedPath(nextPath);
@@ -105,6 +120,9 @@ export function NewMessageWizard({
       setIdea("");
       setPassage("");
       setResponse("");
+      setDevelopDirectionCards(null);
+      setDevelopDirectionKey("");
+      setDevelopDirectionNotice("");
     }
 
     if (nextPath !== "week") {
@@ -122,6 +140,49 @@ export function NewMessageWizard({
     setConcernOffset((current) => current + 5);
     setSelectedConcernIndex(null);
     setSelectedDirection(null);
+  }
+
+  async function loadDevelopDirections(forceRefresh = false) {
+    const mode = messageModes.find((item) => item.id === selectedMode) ?? messageModes[0];
+    if (!forceRefresh && developDirectionCards && developDirectionKey === currentDevelopDirectionKey) {
+      setStage(3);
+      return;
+    }
+    setCreationError("");
+    setDevelopDirectionNotice("");
+    setIsLoadingDevelopDirections(true);
+    try {
+      const directionRequest: DevelopDirectionGenerationInput = {
+        messageIdea: idea.trim(),
+        mainPassage: passage.trim(),
+        desiredResponse: response.trim(),
+        messageMode: selectedMode,
+        messageModeLabel: mode.label,
+      };
+      const directionResponse = await fetch("/api/message-generation/develop-directions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(directionRequest),
+      });
+      const directionPayload = (await directionResponse.json()) as Partial<DevelopDirectionGenerationResponse> & { error?: string };
+      if (!directionResponse.ok || !directionPayload.directions?.length) {
+        setCreationError(directionPayload.error ?? "Directions could not be created right now.");
+        setStage(3);
+        return;
+      }
+      setDevelopDirectionCards(directionPayload.directions);
+      setDevelopDirectionKey(currentDevelopDirectionKey);
+      setSelectedDirection(null);
+      if (directionPayload.generationSource === "curated-fallback") {
+        setDevelopDirectionNotice(directionPayload.warning ?? "These directions were created with the reliable starter generator because AI direction exploration was temporarily unavailable.");
+      }
+      setStage(3);
+    } catch {
+      setCreationError("Directions could not be created right now.");
+      setStage(3);
+    } finally {
+      setIsLoadingDevelopDirections(false);
+    }
   }
 
   async function createMessageDraft() {
@@ -681,8 +742,9 @@ export function NewMessageWizard({
               <div>
                 <h2 className="text-2xl font-bold text-ink">Explore directions</h2>
                 <p className="mt-2 text-sm leading-6 text-muted">
-                  Sample data for preview only. Exploring message ideas does not use one of your
-                  monthly projects.
+                  {selectedPath === "develop"
+                    ? "Review five generated sermon-preparation directions before choosing one to develop. Exploring directions does not create a project."
+                    : "Sample data for preview only. Exploring message ideas does not use one of your monthly projects."}
                 </p>
               </div>
               <div className="flex flex-wrap gap-3">
@@ -693,6 +755,16 @@ export function NewMessageWizard({
                     className="min-h-11 rounded-full bg-gold px-5 py-2 text-sm font-bold text-teal-dark"
                   >
                     Refresh Ideas
+                  </button>
+                ) : null}
+                {selectedPath === "develop" ? (
+                  <button
+                    type="button"
+                    onClick={() => loadDevelopDirections(true)}
+                    disabled={isLoadingDevelopDirections}
+                    className="min-h-11 rounded-full bg-gold px-5 py-2 text-sm font-bold text-teal-dark disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isLoadingDevelopDirections ? "Refreshing..." : "Refresh Directions"}
                   </button>
                 ) : null}
               </div>
@@ -719,8 +791,20 @@ export function NewMessageWizard({
               </div>
             ) : null}
 
+            {isLoadingDevelopDirections ? (
+              <div className="mt-6 rounded-3xl border border-line bg-background p-5 text-sm font-semibold text-teal">
+                Preparing five Develop My Message directions...
+              </div>
+            ) : null}
+
+            {developDirectionNotice && selectedPath === "develop" ? (
+              <div className="mt-5 rounded-3xl border border-gold/40 bg-gold/10 p-4 text-sm font-semibold leading-6 text-teal">
+                {developDirectionNotice}
+              </div>
+            ) : null}
+
             <div className="mt-6 grid gap-4">
-              {directionCards.map((direction, index) => (
+              {!isLoadingDevelopDirections && directionCards.map((direction, index) => (
                 <article
                   key={`${direction.title}-${index}`}
                   className="premium-card rounded-3xl border border-line bg-background p-5"
@@ -787,12 +871,16 @@ export function NewMessageWizard({
                 createMessageDraft();
                 return;
               }
+              if (selectedPath === "develop" && stage === 2) {
+                void loadDevelopDirections();
+                return;
+              }
               setStage((current) => Math.min(stages.length - 1, current + 1));
             }}
             disabled={nextDisabled || isCreating}
             className="min-h-11 rounded-full bg-teal px-5 py-2 text-sm font-bold text-cream-strong disabled:cursor-not-allowed disabled:opacity-45"
           >
-            {isCreating ? "Creating..." : isFinalStage ? "Create Message" : "Continue"}
+            {isCreating ? "Creating..." : isLoadingDevelopDirections ? "Preparing..." : isFinalStage ? "Create Message" : "Continue"}
           </button>
         </div>
       </section>

@@ -1,8 +1,12 @@
 import assert from "node:assert/strict";
+import { detectDevelopTopic } from "../components/app-shell/direction-previews";
 import { getPointCount } from "../components/app-shell/message-draft-storage";
 import { assembleDevelopMessageDraft, validateGeneratedDevelopMessage } from "../lib/message-generation/develop-assembly";
+import { buildCuratedDevelopDirections } from "../lib/message-generation/develop-directions-fallback";
+import { validateDevelopDirections } from "../lib/message-generation/develop-directions-validation";
 import { buildCuratedDevelopDraft } from "../lib/message-generation/develop-fallback";
 import type { GeneratedDevelopMessage } from "../lib/message-generation/develop-schema";
+import type { DevelopDirectionGenerationInput } from "../lib/message-generation/develop-directions-schema";
 import type { DevelopMessageGenerationInput } from "../lib/message-generation/develop-types";
 
 function input(length: "30" | "45" | "60"): DevelopMessageGenerationInput { return { startingPath:"develop", startingPathLabel:"Develop My Message", messageMode:"sunday", messageModeLabel:"Sunday Sermon", length, lengthLabel:`${length} minutes`, translation:"King James Version, KJV", developIdea:"Hope in anxiety", developPassage:"Philippians 4:4-9", desiredResponse:"Pray instead of spiraling", direction:{ title:"Peace for a Divided Heart", scripture:"Philippians 4:4-9", bigIdea:"The peace of God guards what anxiety tries to occupy.", angle:"A message that gives practical spiritual shape to prayer, thought, and trust.", focus:"Calm, practice, and renewed attention." } }; }
@@ -12,4 +16,17 @@ for (const len of ["30","45","60"] as const) { const count=getPointCount(len); a
 const dup=generated(6); dup.points[1].title=dup.points[0].title.toUpperCase(); assert.ok(validateGeneratedDevelopMessage(input("30"), dup).includes("duplicate-title"));
 const missing=generated(6); missing.points[0].application=""; assert.ok(validateGeneratedDevelopMessage(input("30"), missing).includes("missing-application"));
 const bad=generated(6); bad.points[0].scripture="NotABook 99:99"; assert.ok(validateGeneratedDevelopMessage(input("30"), bad).includes("bad-scripture"));
+
+assert.notEqual(detectDevelopTopic("How God restores people after failure and gives them a faithful next step."), "faith");
+const directionInput: DevelopDirectionGenerationInput = { messageIdea:"How God restores people after failure and gives them a faithful next step.", mainPassage:"John 21:15-19", desiredResponse:"", messageMode:"sunday", messageModeLabel:"Sunday Sermon" };
+const directions = buildCuratedDevelopDirections(directionInput);
+assert.equal(directions.length, 5);
+assert.deepEqual(validateDevelopDirections(directionInput, directions), []);
+assert.ok(directions.every((direction) => direction.scripture === "John 21:15-19"));
+assert.equal(new Set(directions.map((direction) => direction.title.toLowerCase())).size, 5);
+assert.equal(new Set(directions.map((direction) => direction.bigIdea.toLowerCase())).size, 5);
+assert.equal(new Set(directions.map((direction) => direction.angle.toLowerCase())).size, 5);
+assert.equal(new Set(directions.map((direction) => direction.focus.toLowerCase())).size, 5);
+assert.ok(directions.some((direction) => direction.bigIdea.toLowerCase().includes("failure")));
+assert.ok(directions.some((direction) => direction.focus.toLowerCase().includes("responsibility") || direction.angle.toLowerCase().includes("responsibility")));
 console.log("message generation checks passed");
