@@ -343,6 +343,11 @@ type ScriptureProfile = {
   transition: string;
 };
 
+export type PointBuildResult = {
+  point: MessageDraftPoint;
+  scriptureItem?: ScriptureBankItem;
+};
+
 const scriptureProfiles: Record<string, ScriptureProfile> = {
   "Isaiah 40:31": {
     title: "God Renews the Waiting Heart",
@@ -524,6 +529,17 @@ function hasSpecificProfile(reference: string) {
   return Boolean(scriptureProfiles[reference]);
 }
 
+function profiledCandidateReferences(input: { directionTitle: string; mainScripture: string; bigIdea: string; pastoralFocus: string; angle: string }) {
+  const topic = topicFrom(input);
+  const mainReference = input.mainScripture.trim();
+  const references = [
+    ...(scripturePools[topic] ?? []),
+    ...scripturePools.default,
+    ...Object.keys(scriptureProfiles),
+  ];
+  return Array.from(new Set(references.filter((reference) => reference !== mainReference && hasSpecificProfile(reference) && getVerseText(reference) !== MISSING_VERSE_TEXT)));
+}
+
 function parseSingleChapterRange(reference: string) {
   const match = reference.trim().match(/^(.+?)\s+(\d+):(\d+)-(\d+)$/);
   if (!match) return null;
@@ -587,7 +603,7 @@ function chooseReferences(input: {
   angle: string;
 }) {
   const needed = getPointCount(input.length);
-  const pool = [...scripturePools[topicFrom(input)], ...scripturePools.default].filter(hasSpecificProfile);
+  const pool = profiledCandidateReferences(input);
   const mainBook = bookOf(input.mainScripture);
   const seenBooks = new Set<string>();
   const chosen: string[] = [];
@@ -753,17 +769,24 @@ export function buildInitialPoints(input: {
 }
 
 function buildPointForIndex(input: { directionTitle: string; mainScripture: string; bigIdea: string; pastoralFocus: string; angle: string }, supportBank: ScriptureBankItem[], seeds: MovementSeed[], index: number, usedTitles = new Set<string>(), usedScriptures = new Set<string>()): MessageDraftPoint {
-  const available = supportBank.find((item) => !usedScriptures.has(item.reference)) ?? supportBank[index % Math.max(supportBank.length, 1)] ?? makeScriptureItem(input.mainScripture, index, input);
+  const available = supportBank.find((item) => !usedScriptures.has(item.reference) && !usedTitles.has(profileFor(item.reference).title))
+    ?? supportBank.find((item) => !usedScriptures.has(item.reference))
+    ?? supportBank[index % Math.max(supportBank.length, 1)]
+    ?? makeScriptureItem(input.mainScripture, index, input);
   const profile = profileFor(available.reference);
   const seed = seeds[index % seeds.length];
   const baseTitle = profile.title || seed.title;
-  const title = usedTitles.has(baseTitle) ? `${baseTitle} Again in Daily Life` : baseTitle;
+  const title = usedTitles.has(baseTitle) ? qualityText(`${available.reference} Gives a Fresh Word`, 9) : baseTitle;
+  return pointFromProfile(input, available, profile, index, title);
+}
+
+function pointFromProfile(input: { directionTitle: string; mainScripture: string; bigIdea: string; pastoralFocus: string; angle: string }, scripture: ScriptureBankItem, profile: ScriptureProfile, index: number, title = profile.title): MessageDraftPoint {
   return {
     id: `movement-${Date.now()}-${index + 1}-${Math.random().toString(36).slice(2, 7)}`,
     title: qualityText(title, 9),
     summary: qualityText(`${profile.summary} This remains tied to ${input.mainScripture} and ${cleanSentence(input.directionTitle).toLowerCase()}.`),
-    scripture: available.reference,
-    scriptureText: available.text,
+    scripture: scripture.reference,
+    scriptureText: scripture.text,
     bullets: Array.from(new Set(profile.bullets.map((bullet) => qualityText(bullet)))).slice(0, 3),
     explanation: qualityText(`${profile.explanation} Connect it back to ${input.mainScripture} by showing how this supporting truth serves the sermon’s central burden: ${cleanSentence(input.bigIdea).toLowerCase()}`),
     application: qualityText(profile.application),
@@ -775,31 +798,69 @@ function buildPointForIndex(input: { directionTitle: string; mainScripture: stri
   };
 }
 
-export function buildAdditionalPoint(draft: MessageDraft): MessageDraftPoint {
-  const usedTitles = new Set(draft.points.map((point) => point.title));
-  const usedScriptures = new Set(draft.points.map((point) => point.scripture));
-  const supportBank = draft.scriptureBank.filter((item) => item.reference !== draft.mainScripture);
-  return buildPointForIndex(draft, supportBank, movementSeedsFor(draft), draft.points.length, usedTitles, usedScriptures);
+function scriptureItemFor(reference: string, index: number) {
+  return makeScriptureItem(reference, index);
 }
 
-export function rewriteMessagePoint(draft: MessageDraft, point: MessageDraftPoint): MessageDraftPoint {
-  const usedScriptures = new Set(draft.points.filter((item) => item.id !== point.id).map((item) => item.scripture));
-  const supportBank = draft.scriptureBank.filter((item) => item.reference !== draft.mainScripture);
-  const alternate = supportBank.find((item) => !usedScriptures.has(item.reference) && item.reference !== point.scripture) ?? supportBank.find((item) => item.reference === point.scripture) ?? makeScriptureItem(point.scripture, 0, draft);
-  const profile = profileFor(alternate.reference);
+function scriptureResultFor(draft: MessageDraft, reference: string, index: number) {
+  const existing = draft.scriptureBank.find((item) => item.reference === reference);
+  const item = existing ?? scriptureItemFor(reference, index);
+  return { item, scriptureItem: existing ? undefined : item };
+}
+
+function firstUnusedProfiledReference(draft: MessageDraft, exclude = new Set<string>()) {
+  const usedScriptures = new Set([...draft.points.map((point) => point.scripture), ...exclude]);
+  return profiledCandidateReferences(draft).find((reference) => !usedScriptures.has(reference));
+}
+
+export function buildAdditionalPoint(draft: MessageDraft): PointBuildResult {
+  const usedTitles = new Set(draft.points.map((point) => point.title));
+  const reference = firstUnusedProfiledReference(draft) ?? profiledCandidateReferences(draft).find((candidate) => !usedTitles.has(profileFor(candidate).title)) ?? draft.mainScripture;
+  const { item, scriptureItem } = scriptureResultFor(draft, reference, draft.points.length);
+  const point = pointFromProfile(draft, item, profileFor(item.reference), draft.points.length);
+  return { point, scriptureItem };
+}
+
+function rewriteProfileFor(reference: string): ScriptureProfile {
+  if (reference === "Proverbs 3:5") {
+    return {
+      title: "Release the Demand to Understand Everything",
+      summary: "Trust grows when believers stop requiring full understanding before obeying the Lord.",
+      bullets: ["The verse calls for trust with the whole heart.", "Leaning on personal understanding can become a hidden form of control.", "Faith obeys God before every outcome is explained."],
+      explanation: "Proverbs 3:5 can be preached as a release from the demand to understand everything. The weary heart often wants certainty before trust, but the verse calls God's people to lean their full weight on the Lord.",
+      application: "Name the situation where unanswered questions have become a barrier to obedience, and take one obedient step without waiting for total clarity.",
+      illustrationOptions: ["A traveler following a trusted guide when the trail turns out of sight.", "A patient following wise instructions before feeling immediate improvement.", "A child crossing a busy street by holding a parent's hand instead of understanding the traffic pattern."],
+      transition: "Released from the need to control every answer, the sermon can move toward receiving the Lord's strength for the next step.",
+    };
+  }
+  const profile = profileFor(reference);
   return {
-    ...point,
-    title: qualityText(profile.title, 9),
-    summary: qualityText(`${profile.summary} This rewritten movement keeps the sermon connected to ${draft.mainScripture}.`),
-    scripture: alternate.reference,
-    scriptureText: alternate.text,
-    bullets: profile.bullets.map((bullet) => qualityText(bullet)),
-    explanation: qualityText(profile.explanation),
-    application: qualityText(profile.application),
-    illustrationOptions: profile.illustrationOptions.map((option) => qualityText(option)),
-    transition: qualityText(profile.transition),
-    status: "rewritten",
-    notes: point.notes,
+    title: `Receive ${profile.title.replace(/^God |^Christ |^The Lord /, "")}`,
+    summary: `${profile.summary} This rewrite presses the truth toward a fresh pastoral response.`,
+    bullets: profile.bullets.map((bullet, index) => (index === 0 ? `Receive this truth personally: ${bullet.charAt(0).toLowerCase()}${bullet.slice(1)}` : bullet)),
+    explanation: `${profile.explanation} The rewritten angle asks how this truth changes the listener's posture before God today.`,
+    application: `${profile.application} Practice it in one named relationship, responsibility, or burden before the day ends.`,
+    illustrationOptions: [...profile.illustrationOptions].reverse(),
+    transition: `${profile.transition} Carry that response into the next movement of the message.`,
+  };
+}
+
+export function rewriteMessagePoint(draft: MessageDraft, point: MessageDraftPoint): PointBuildResult {
+  const otherScriptures = new Set(draft.points.filter((item) => item.id !== point.id).map((item) => item.scripture));
+  const reference = firstUnusedProfiledReference(draft, new Set([point.scripture])) ?? point.scripture;
+  const { item, scriptureItem } = scriptureResultFor(draft, reference, draft.points.length);
+  const profile = reference === point.scripture ? rewriteProfileFor(reference) : profileFor(reference);
+  const rewritten = pointFromProfile(draft, item, profile, draft.points.findIndex((itemPoint) => itemPoint.id === point.id));
+  return {
+    point: {
+      ...rewritten,
+      id: point.id,
+      notes: point.notes,
+      includeOptionalResponse: point.includeOptionalResponse,
+      optionalResponseMoment: point.optionalResponseMoment,
+      status: "rewritten",
+    },
+    scriptureItem: otherScriptures.has(reference) ? undefined : scriptureItem,
   };
 }
 
@@ -819,7 +880,7 @@ export function cleanMessageDraft(draft: MessageDraft): MessageDraft {
       bullets: Array.from(new Set((draft.introduction.bullets ?? []).map((bullet) => qualityText(bullet)).filter(Boolean))).slice(0, 4),
       scripture: draft.introduction.scripture ? qualityText(draft.introduction.scripture) : undefined,
       scriptureText: draft.introduction.scriptureText ? qualityText(draft.introduction.scriptureText) : undefined,
-      notes: qualityText(draft.introduction.notes ?? ""),
+      notes: draft.introduction.notes ?? "",
     },
     points: draft.points.map((point) => {
       const application = qualityText(point.application);
@@ -837,7 +898,7 @@ export function cleanMessageDraft(draft: MessageDraft): MessageDraft {
         optionalResponseMoment: point.optionalResponseMoment ? qualityText(point.optionalResponseMoment) : undefined,
         scripture: qualityText(point.scripture),
         scriptureText: point.scriptureText ? qualityText(point.scriptureText) : getVerseText(point.scripture),
-        notes: qualityText(point.notes ?? ""),
+        notes: point.notes ?? "",
       };
     }),
     scriptureBank: Array.from(new Map(draft.scriptureBank.map((item) => [item.reference, { ...item, supportNote: "", fullContext: undefined }])).values()),
@@ -849,7 +910,7 @@ export function cleanMessageDraft(draft: MessageDraft): MessageDraft {
       bullets: Array.from(new Set((draft.closing.bullets ?? []).map((bullet) => qualityText(bullet)).filter(Boolean))).slice(0, 4),
       scripture: draft.closing.scripture ? qualityText(draft.closing.scripture) : undefined,
       scriptureText: draft.closing.scriptureText ? qualityText(draft.closing.scriptureText) : undefined,
-      notes: qualityText(draft.closing.notes ?? ""),
+      notes: draft.closing.notes ?? "",
     },
   };
 }

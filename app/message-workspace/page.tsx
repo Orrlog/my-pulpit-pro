@@ -502,10 +502,14 @@ export default function MessageWorkspacePage() {
               onEdit={() => setDetailPanel({ kind: "point", id: point.id })}
               onKeep={() => patchPoint(point.id, { status: "kept" })}
               onRewrite={() =>
-                updateDraft((current) => ({
-                  ...current,
-                  points: current.points.map((item) => (item.id === point.id ? rewriteMessagePoint(current, item) : item)),
-                }))
+                updateDraft((current) => {
+                  const result = rewriteMessagePoint(current, point);
+                  return {
+                    ...current,
+                    scriptureBank: result.scriptureItem ? [...current.scriptureBank, result.scriptureItem] : current.scriptureBank,
+                    points: current.points.map((item) => (item.id === point.id ? result.point : item)),
+                  };
+                })
               }
               onRemove={(trigger) => {
                 deleteTriggerRef.current = trigger;
@@ -516,7 +520,14 @@ export default function MessageWorkspacePage() {
           <button
             type="button"
             onClick={() => {
-              updateDraft((current) => ({ ...current, points: [...current.points, buildAdditionalPoint(current)] }));
+              updateDraft((current) => {
+                const result = buildAdditionalPoint(current);
+                return {
+                  ...current,
+                  scriptureBank: result.scriptureItem ? [...current.scriptureBank, result.scriptureItem] : current.scriptureBank,
+                  points: [...current.points, result.point],
+                };
+              });
             }}
             className="min-h-12 rounded-full bg-gold px-5 py-3 text-sm font-bold text-teal-dark transition hover:bg-gold/90 focus:outline-none focus:ring-2 focus:ring-gold focus:ring-offset-2"
           >

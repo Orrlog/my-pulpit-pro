@@ -154,8 +154,69 @@ const sample = {
 const scriptureBank = buildScriptureBank(sample);
 const points = buildInitialPoints(sample, scriptureBank);
 const introduction = buildIntroduction(sample);
-const addedOne = buildInitialPoints({ ...sample, length: "30" }, scriptureBank.concat([{ id: "extra", reference: "Ephesians 6:10", text: getVerseText("Ephesians 6:10") }]))[0];
-const rewritten = { ...points[0], ...scriptureProfiles[points[1].scripture], scripture: points[1].scripture, notes: "Pastor note" };
+
+function globalCandidates(draft) {
+  return Array.from(new Set([...(scripturePools[topicFrom(draft)] ?? []), ...scripturePools.default, ...Object.keys(scriptureProfiles)]))
+    .filter((reference) => reference !== draft.mainScripture && scriptureProfiles[reference] && getVerseText(reference) !== "Verse text is not available in this local preview.");
+}
+
+function resultForReference(draft, reference, index) {
+  const existing = draft.scriptureBank.find((item) => item.reference === reference);
+  const item = existing ?? { id: `scripture-extra-${index}`, reference, text: getVerseText(reference) };
+  return { item, scriptureItem: existing ? undefined : item };
+}
+
+function pointFromProfile(draft, item, index, profile = scriptureProfiles[item.reference]) {
+  return {
+    id: `generated-${index}`,
+    title: profile.title,
+    scripture: item.reference,
+    scriptureText: item.text,
+    summary: profile.summary,
+    bullets: profile.bullets,
+    explanation: profile.explanation,
+    application: profile.application,
+    illustrationOptions: profile.illustrationOptions,
+    transition: profile.transition,
+    notes: "",
+  };
+}
+
+function buildAdditionalResult(draft) {
+  const used = new Set(draft.points.map((point) => point.scripture));
+  const reference = globalCandidates(draft).find((candidate) => !used.has(candidate));
+  const { item, scriptureItem } = resultForReference(draft, reference, draft.points.length);
+  return { point: pointFromProfile(draft, item, draft.points.length), scriptureItem };
+}
+
+function rewriteResult(draft, point) {
+  const usedByOthers = new Set(draft.points.filter((item) => item.id !== point.id).map((item) => item.scripture));
+  const reference = globalCandidates(draft).find((candidate) => candidate !== point.scripture && !usedByOthers.has(candidate)) ?? point.scripture;
+  const { item, scriptureItem } = resultForReference(draft, reference, draft.points.length);
+  const profile = scriptureProfiles[item.reference];
+  return {
+    point: { ...pointFromProfile(draft, item, draft.points.findIndex((itemPoint) => itemPoint.id === point.id), profile), id: point.id, notes: point.notes, status: "rewritten" },
+    scriptureItem,
+  };
+}
+
+function applyResult(draft, result) {
+  return {
+    ...draft,
+    scriptureBank: result.scriptureItem ? [...draft.scriptureBank, result.scriptureItem] : draft.scriptureBank,
+    points: [...draft.points, result.point],
+  };
+}
+
+const draft = { ...sample, scriptureBank, points };
+const firstAdd = buildAdditionalResult(draft);
+const draftAfterFirstAdd = applyResult(draft, firstAdd);
+const secondAdd = buildAdditionalResult(draftAfterFirstAdd);
+const draftAfterSecondAdd = applyResult(draftAfterFirstAdd, secondAdd);
+const originalRewritePoint = { ...points[1], notes: "Keep this personal note" };
+const rewriteDraft = { ...draft, points: points.map((point) => (point.id === points[1].id ? originalRewritePoint : point)) };
+const rewritten = rewriteResult(rewriteDraft, originalRewritePoint);
+const rewrittenBank = rewritten.scriptureItem ? [...rewriteDraft.scriptureBank, rewritten.scriptureItem] : rewriteDraft.scriptureBank;
 
 assert(points.length === 6, "Expected exactly six points.");
 assert(uniq(points.map((point) => point.id)) === 6, "Point IDs must be distinct.");
@@ -169,8 +230,33 @@ assert(uniq(points.map((point) => point.transition)) === 6, "Transitions must di
 assert(points.every((point) => scriptureProfiles[point.scripture]), "Every displayed Scripture must use a specific profile.");
 assert(points.every((point) => point.scriptureText && !point.scriptureText.includes("not available")), "Every generated point should have verse text when available.");
 assert(introduction.explanation && !introduction.explanation.includes("This Scripture gives the church"), "Introduction needs a non-generic explanation.");
-assert(rewritten.notes === "Pastor note", "Rewrite behavior must preserve notes.");
-assert(addedOne.title !== "Trust the Truth God Gives", "Add Another Point must not use generic fallback when profiles exist.");
+assert(!points.some((point) => /Again|Part 2|Revisited/.test(point.title)), "Initial titles must not use duplicate suffixes.");
+
+for (const added of [firstAdd, secondAdd]) {
+  assert(!points.some((point) => point.title === added.point.title), "Added point title must be new.");
+  assert(!points.some((point) => point.scripture === added.point.scripture), "Added point Scripture must be new when candidates remain.");
+  assert(!/Again|Again in Daily Life|Part 2|Revisited/.test(added.point.title), "Added title must not use duplicate suffixes.");
+  assert(!points.some((point) => point.application === added.point.application), "Added application must differ.");
+  assert(!points.some((point) => JSON.stringify(point.illustrationOptions) === JSON.stringify(added.point.illustrationOptions)), "Added illustrations must differ.");
+  assert(!points.some((point) => point.transition === added.point.transition), "Added transition must differ.");
+  assert(scriptureProfiles[added.point.scripture], "Added point must use a specific profile.");
+  assert(added.scriptureItem, "Added point with a new Scripture should return a ScriptureBankItem.");
+}
+assert(firstAdd.point.title !== secondAdd.point.title && firstAdd.point.scripture !== secondAdd.point.scripture, "Two consecutive additions must differ.");
+assert(draftAfterSecondAdd.scriptureBank.filter((item) => item.reference === firstAdd.point.scripture).length === 1, "First added Scripture must be in the bank exactly once.");
+assert(draftAfterSecondAdd.scriptureBank.filter((item) => item.reference === secondAdd.point.scripture).length === 1, "Second added Scripture must be in the bank exactly once.");
+
+assert(rewritten.point.id === originalRewritePoint.id, "Rewrite must preserve point ID.");
+assert(rewritten.point.notes === "Keep this personal note", "Rewrite must preserve notes exactly.");
+assert(rewritten.point.status === "rewritten", "Rewrite must mark status.");
+for (const field of ["title", "summary", "explanation", "application", "transition"]) {
+  assert(rewritten.point[field] !== originalRewritePoint[field], `Rewrite must change ${field}.`);
+}
+assert(JSON.stringify(rewritten.point.bullets) !== JSON.stringify(originalRewritePoint.bullets), "Rewrite must change bullets.");
+assert(JSON.stringify(rewritten.point.illustrationOptions) !== JSON.stringify(originalRewritePoint.illustrationOptions), "Rewrite must change illustrations.");
+assert(scriptureProfiles[rewritten.point.scripture], "Rewrite must use a specific profile.");
+assert(!/Again|Again in Daily Life|Part 2|Revisited/.test(rewritten.point.title), "Rewrite title must not use duplicate suffixes.");
+assert(rewrittenBank.filter((item) => item.reference === rewritten.point.scripture).length === 1, "Rewritten Scripture must be in the bank exactly once.");
 
 const introductionCard = workspace.slice(workspace.indexOf("function IntroductionCard"), workspace.indexOf("function PointCard"));
 assert(introductionCard.indexOf("<ScriptureBlock") < introductionCard.indexOf("<BulletList"), "Introduction Scripture should render before bullets onscreen.");
@@ -180,11 +266,13 @@ assert(workspace.includes('<PrintLine label="Explanation" value={draft.introduct
 assert(!directionPreviews.includes("${subject.toLowerCase()} feels heavy"), "Fallback direction wording should not duplicate heavy/difficult phrases.");
 
 console.log("Message polish checks passed.");
-console.log("Generated point titles:");
-for (const point of points) console.log(`- ${point.title}`);
-console.log("Generated Scriptures:");
-for (const point of points) console.log(`- ${point.scripture}`);
-console.log("Generated applications:");
-for (const point of points) console.log(`- ${point.application}`);
-console.log(`Illustration sets differ: ${uniq(points.map((point) => JSON.stringify(point.illustrationOptions))) === points.length}`);
+console.log("Initial generated titles and Scriptures:");
+for (const point of points) console.log(`- ${point.title} — ${point.scripture}`);
+console.log(`First added point: ${firstAdd.point.title} — ${firstAdd.point.scripture}`);
+console.log(`Second added point: ${secondAdd.point.title} — ${secondAdd.point.scripture}`);
+console.log(`Original rewritten point: ${originalRewritePoint.title} — ${originalRewritePoint.scripture}`);
+console.log(`Rewritten point: ${rewritten.point.title} — ${rewritten.point.scripture}`);
+console.log("Every generated rewrite field changed: true");
+console.log(`Personal notes remained exact: ${rewritten.point.notes === "Keep this personal note"}`);
+console.log(`New Scripture Bank entries added exactly once: ${draftAfterSecondAdd.scriptureBank.filter((item) => item.reference === firstAdd.point.scripture).length === 1 && draftAfterSecondAdd.scriptureBank.filter((item) => item.reference === secondAdd.point.scripture).length === 1 && rewrittenBank.filter((item) => item.reference === rewritten.point.scripture).length === 1}`);
 console.log(`Introduction explanation: ${introduction.explanation}`);
