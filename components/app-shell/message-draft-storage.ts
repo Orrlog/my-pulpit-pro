@@ -59,6 +59,11 @@ export type MessageDraftPoint = {
   status?: "kept" | "rewritten";
 };
 
+export type GenerationHistory = {
+  scriptureReferences: string[];
+  pointTitles: string[];
+};
+
 export type MessageDraft = {
   id: string;
   createdAt: string;
@@ -87,6 +92,7 @@ export type MessageDraft = {
   introduction: MessageDraftIntroduction;
   points: MessageDraftPoint[];
   closing: MessageDraftClosing;
+  generationHistory?: GenerationHistory;
 };
 
 type LegacyDraft = Partial<Omit<MessageDraft, "introduction" | "points" | "closing" | "scriptureBank">> & {
@@ -741,6 +747,36 @@ function qualityText(value: string, maxTitleWords?: number) {
   return next;
 }
 
+function uniqueValues(values: Array<string | undefined>) {
+  return Array.from(new Set(values.map((value) => value?.trim()).filter((value): value is string => Boolean(value))));
+}
+
+export function mergeGenerationHistory(draft: MessageDraft, points: MessageDraftPoint[] = draft.points): GenerationHistory {
+  return {
+    scriptureReferences: uniqueValues([...(draft.generationHistory?.scriptureReferences ?? []), ...draft.scriptureBank.filter((item) => item.reference !== draft.mainScripture).map((item) => item.reference), ...points.map((point) => point.scripture)]),
+    pointTitles: uniqueValues([...(draft.generationHistory?.pointTitles ?? []), ...points.map((point) => point.title)]),
+  };
+}
+
+export function normalizeActiveScriptureBank(draft: MessageDraft): ScriptureBankItem[] {
+  const references = uniqueValues([
+    draft.mainScripture,
+    draft.introduction.scripture,
+    ...draft.points.map((point) => point.scripture),
+    draft.closing.scripture,
+  ]);
+  return references.map((reference, index) => {
+    const existing = draft.scriptureBank.find((item) => item.reference === reference);
+    return {
+      id: existing?.id ?? `scripture-${Date.now()}-${index}`,
+      reference,
+      text: existing?.text && existing.text !== MISSING_VERSE_TEXT ? existing.text : getVerseText(reference),
+      supportNote: "",
+      fullContext: undefined,
+    };
+  });
+}
+
 export function buildInitialPoints(input: {
   length: string;
   directionTitle: string;
@@ -809,13 +845,17 @@ function scriptureResultFor(draft: MessageDraft, reference: string, index: numbe
 }
 
 function firstUnusedProfiledReference(draft: MessageDraft, exclude = new Set<string>()) {
-  const usedScriptures = new Set([...draft.points.map((point) => point.scripture), ...exclude]);
-  return profiledCandidateReferences(draft).find((reference) => !usedScriptures.has(reference));
+  const history = mergeGenerationHistory(draft);
+  const usedScriptures = new Set([...draft.points.map((point) => point.scripture), ...history.scriptureReferences, ...exclude]);
+  const usedTitles = new Set([...draft.points.map((point) => point.title), ...history.pointTitles]);
+  return profiledCandidateReferences(draft).find((reference) => !usedScriptures.has(reference) && !usedTitles.has(profileFor(reference).title));
 }
 
 export function buildAdditionalPoint(draft: MessageDraft): PointBuildResult {
-  const usedTitles = new Set(draft.points.map((point) => point.title));
-  const reference = firstUnusedProfiledReference(draft) ?? profiledCandidateReferences(draft).find((candidate) => !usedTitles.has(profileFor(candidate).title)) ?? draft.mainScripture;
+  const history = mergeGenerationHistory(draft);
+  const usedTitles = new Set([...draft.points.map((point) => point.title), ...history.pointTitles]);
+  const usedScriptures = new Set([...draft.points.map((point) => point.scripture), ...history.scriptureReferences]);
+  const reference = firstUnusedProfiledReference(draft) ?? profiledCandidateReferences(draft).find((candidate) => !usedScriptures.has(candidate) && !usedTitles.has(profileFor(candidate).title)) ?? draft.mainScripture;
   const { item, scriptureItem } = scriptureResultFor(draft, reference, draft.points.length);
   const point = pointFromProfile(draft, item, profileFor(item.reference), draft.points.length);
   return { point, scriptureItem };
@@ -901,7 +941,8 @@ export function cleanMessageDraft(draft: MessageDraft): MessageDraft {
         notes: point.notes ?? "",
       };
     }),
-    scriptureBank: Array.from(new Map(draft.scriptureBank.map((item) => [item.reference, { ...item, supportNote: "", fullContext: undefined }])).values()),
+    scriptureBank: normalizeActiveScriptureBank(draft),
+    generationHistory: mergeGenerationHistory(draft),
     closing: {
       recap: qualityText(draft.closing.recap),
       callToResponse: qualityText(draft.closing.callToResponse),

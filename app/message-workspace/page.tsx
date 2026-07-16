@@ -7,6 +7,8 @@ import {
   MISSING_VERSE_TEXT,
   buildAdditionalPoint,
   getVerseText,
+  mergeGenerationHistory,
+  normalizeActiveScriptureBank,
   rewriteMessagePoint,
   type MessageDraft,
   type MessageDraftClosing,
@@ -374,24 +376,26 @@ export default function MessageWorkspacePage() {
   }
 
   function patchIntroduction(patch: Partial<MessageDraftIntroduction>) {
-    updateDraft((current) => ({
-      ...current,
-      introduction: { ...current.introduction, ...patch },
-    }));
+    updateDraft((current) => {
+      const next = { ...current, introduction: { ...current.introduction, ...patch } };
+      return { ...next, scriptureBank: normalizeActiveScriptureBank(next) };
+    });
   }
 
   function patchClosing(patch: Partial<MessageDraftClosing>) {
-    updateDraft((current) => ({
-      ...current,
-      closing: { ...current.closing, ...patch },
-    }));
+    updateDraft((current) => {
+      const next = { ...current, closing: { ...current.closing, ...patch } };
+      return { ...next, scriptureBank: normalizeActiveScriptureBank(next) };
+    });
   }
 
   function patchPoint(id: string, patch: Partial<MessageDraftPoint>) {
-    updateDraft((current) => ({
-      ...current,
-      points: updatePoint(current.points, id, patch),
-    }));
+    updateDraft((current) => {
+      const previous = current.points.find((point) => point.id === id);
+      const points = updatePoint(current.points, id, patch);
+      const next = { ...current, points, generationHistory: mergeGenerationHistory(current, previous ? [previous, points.find((point) => point.id === id)!] : points) };
+      return { ...next, scriptureBank: normalizeActiveScriptureBank(next) };
+    });
   }
 
   function print(mode: Exclude<PrintMode, null>) {
@@ -483,32 +487,47 @@ export default function MessageWorkspacePage() {
               onDragOver={handlePointDrag}
               onDrop={() => {
                 if (!draggedPointId || draggedPointId === point.id) return;
-                updateDraft((current) => ({
-                  ...current,
-                  points: moveItem(
-                    current.points,
-                    current.points.findIndex((item) => item.id === draggedPointId),
-                    current.points.findIndex((item) => item.id === point.id),
-                  ),
-                }));
+                updateDraft((current) => {
+                  const next = {
+                    ...current,
+                    points: moveItem(
+                      current.points,
+                      current.points.findIndex((item) => item.id === draggedPointId),
+                      current.points.findIndex((item) => item.id === point.id),
+                    ),
+                  };
+                  return { ...next, scriptureBank: normalizeActiveScriptureBank(next) };
+                });
                 setDraggedPointId(null);
                 setDragScrollDirection(0);
               }}
               onDragEnd={() => { setDraggedPointId(null); setDragScrollDirection(0); }}
-              onMoveUp={() => updateDraft((current) => ({ ...current, points: moveItem(current.points, index, index - 1) }))}
-              onMoveDown={() => updateDraft((current) => ({ ...current, points: moveItem(current.points, index, index + 1) }))}
-              onMoveTo={(position) => updateDraft((current) => ({ ...current, points: moveItem(current.points, index, position - 1) }))}
+              onMoveUp={() => updateDraft((current) => {
+                const next = { ...current, points: moveItem(current.points, index, index - 1) };
+                return { ...next, scriptureBank: normalizeActiveScriptureBank(next) };
+              })}
+              onMoveDown={() => updateDraft((current) => {
+                const next = { ...current, points: moveItem(current.points, index, index + 1) };
+                return { ...next, scriptureBank: normalizeActiveScriptureBank(next) };
+              })}
+              onMoveTo={(position) => updateDraft((current) => {
+                const next = { ...current, points: moveItem(current.points, index, position - 1) };
+                return { ...next, scriptureBank: normalizeActiveScriptureBank(next) };
+              })}
               onNotesChange={(notes) => patchPoint(point.id, { notes })}
               onEdit={() => setDetailPanel({ kind: "point", id: point.id })}
               onKeep={() => patchPoint(point.id, { status: "kept" })}
               onRewrite={() =>
                 updateDraft((current) => {
                   const result = rewriteMessagePoint(current, point);
-                  return {
+                  const points = current.points.map((item) => (item.id === point.id ? result.point : item));
+                  const next = {
                     ...current,
+                    points,
+                    generationHistory: mergeGenerationHistory(current, [point, result.point]),
                     scriptureBank: result.scriptureItem ? [...current.scriptureBank, result.scriptureItem] : current.scriptureBank,
-                    points: current.points.map((item) => (item.id === point.id ? result.point : item)),
                   };
+                  return { ...next, scriptureBank: normalizeActiveScriptureBank(next) };
                 })
               }
               onRemove={(trigger) => {
@@ -522,11 +541,14 @@ export default function MessageWorkspacePage() {
             onClick={() => {
               updateDraft((current) => {
                 const result = buildAdditionalPoint(current);
-                return {
+                const points = [...current.points, result.point];
+                const next = {
                   ...current,
+                  points,
+                  generationHistory: mergeGenerationHistory(current, [result.point]),
                   scriptureBank: result.scriptureItem ? [...current.scriptureBank, result.scriptureItem] : current.scriptureBank,
-                  points: [...current.points, result.point],
                 };
+                return { ...next, scriptureBank: normalizeActiveScriptureBank(next) };
               });
             }}
             className="min-h-12 rounded-full bg-gold px-5 py-3 text-sm font-bold text-teal-dark transition hover:bg-gold/90 focus:outline-none focus:ring-2 focus:ring-gold focus:ring-offset-2"
@@ -597,7 +619,9 @@ export default function MessageWorkspacePage() {
           onConfirm={() => {
             updateDraft((current) => {
               if (current.points.length === 1) return current;
-              return { ...current, points: current.points.filter((item) => item.id !== pointPendingDelete.id) };
+              const points = current.points.filter((item) => item.id !== pointPendingDelete.id);
+              const next = { ...current, points, generationHistory: mergeGenerationHistory(current, [pointPendingDelete]) };
+              return { ...next, scriptureBank: normalizeActiveScriptureBank(next) };
             });
             setPointPendingDelete(null);
           }}
