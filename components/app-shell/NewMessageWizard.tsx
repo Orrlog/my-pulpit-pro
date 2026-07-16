@@ -237,17 +237,26 @@ export function NewMessageWizard({
         usedFallbackGeneration = generationPayload.generationSource === "curated-fallback";
       }
 
-      const response = await fetch("/api/message-projects", {
+      const projectResponse = await fetch("/api/message-projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ draft: cleanMessageDraft(draftToCreate) }),
       });
-      const payload = (await response.json()) as { project?: { id: string }; error?: string };
-      if (!response.ok || !payload.project) {
-        setCreationError(payload.error ?? "This message project could not be created right now.");
+      const projectPayload = (await projectResponse.json()) as {
+        project?: { id: string };
+        error?: string;
+      };
+      if (!projectResponse.ok || !projectPayload.project) {
+        setCreationError(
+          projectPayload.error ?? "This message project could not be created right now.",
+        );
         return;
       }
-      router.push(`/message-workspace?project=${payload.project.id}${usedFallbackGeneration ? "&generation=fallback" : ""}`);
+      router.push(
+        `/message-workspace?project=${projectPayload.project.id}${
+          usedFallbackGeneration ? "&generation=fallback" : ""
+        }`,
+      );
     } catch {
       setCreationError("This message project could not be created right now.");
     } finally {
